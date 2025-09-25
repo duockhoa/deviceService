@@ -1,22 +1,9 @@
 require('dotenv').config();
 const express = require('express')
 const app = express()
-const port = process.env.PORT || 3005
+const port = process.env.PORT || 3003
 const path = require('path')
 require('./jobs');
-const http = require('http')
-const server = http.createServer(app)
-const { Server } = require('socket.io')
-const io = new Server(server, {
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    credentials: true
-  }
-});
-
-require('./configs/socket.io')(io);
-
 
 // cookie-parser
 var cookieParser = require('cookie-parser')
@@ -34,9 +21,9 @@ app.use(express.urlencoded({ limit: '100MB', extended: true }));
 app.use(express.static(path.join(  __dirname, '../','public')))
 
 // routes
-const router = require('./routes/index.router')
+const router = require('./routes/index.js');
 app.use('/api/v1/', router)
 
-server.listen(port, () => {
+app.listen(port, () => {
   console.log(`Example app listening on port ${port}`)
 })
