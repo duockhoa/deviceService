@@ -1,7 +1,7 @@
 const axios = require("axios");
 
-const customAxios = axios.create({
-  baseURL: "https://mysql.dkpharma.io.vn/api/v1", // Replace with your API base URL
+const authAxios = axios.create({
+  baseURL: "https://auth.dkpharma.io.vn/api/v1", // Replace with your Auth API base URL
   timeout: 10000, // Set a timeout limit for requests
   headers: {
     "Content-Type": "application/json",
@@ -10,7 +10,7 @@ const customAxios = axios.create({
 });
 
 // Add a request interceptor
-customAxios.interceptors.request.use(
+authAxios.interceptors.request.use(
   (config) => {
     // You can modify the request config here (e.g., add auth tokens)
     return config;
@@ -22,7 +22,7 @@ customAxios.interceptors.request.use(
 );
 
 // Add a response interceptor
-customAxios.interceptors.response.use(
+authAxios.interceptors.response.use(
   (response) => {
     // Any status code that lie within the range of 2xx cause this function to trigger
     return response;
@@ -33,5 +33,5 @@ customAxios.interceptors.response.use(
     return Promise.reject(error);
   }
 );
-
-module.exports = customAxios;
+ 
+module.exports = authAxios;

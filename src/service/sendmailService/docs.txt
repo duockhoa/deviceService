@@ -1,7 +1,0 @@
-curl -X POST 'https://script.google.com/macros/s/AKfycbweaV-u6v08K1R-MRul9C2Cl8WYOAkNNjdpA8Cog7_VkDpsCkEVGkQqBGeXo_IzpsGD/exec' \
--H 'Content-Type: application/json' \
--d '{
-  "to": "nguoinhan@example.com",
-  "subject": "Thông báo từ DK Request",
-  "body": "Chào bạn, đây là email test gửi từ API DK Request."
-}'

@@ -1,6 +1,6 @@
 require('dotenv').config(); 
 const {Sequelize , DataTypes} = require('sequelize');
-const database = 'dkdatabase';
+const database = 'qltb';
 const username = 'root';
 
 // Tạo kết nối không chỉ định database để tạo database

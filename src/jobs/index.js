@@ -1,6 +1,6 @@
+const syncUser = require('./syncUser')
 function startJobs() {
-    console.log('Jobs started...');
-    // Add your job logic here
+   syncUser();
 }
 
 startJobs();
