@@ -1,6 +1,6 @@
-const syncUser = require('./syncUser')
+const syncDatabase = require('./syncDatabase')
 function startJobs() {
-   syncUser();
+   syncDatabase();
 }
 
 startJobs();

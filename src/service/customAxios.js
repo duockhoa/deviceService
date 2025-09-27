@@ -33,5 +33,5 @@ customAxios.interceptors.response.use(
     return Promise.reject(error);
   }
 );
-
+ 
 module.exports = customAxios;

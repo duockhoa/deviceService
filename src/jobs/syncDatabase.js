@@ -1,12 +1,56 @@
 const axios = require("../service/AuthService/authAxios");
 const login = require("../service/AuthService/loginAuth");
-const { User } = require("../models/user.model");
+const { User, Departments } = require("../models/index");
+
+// Helper function to compare department data
+const hasDepartmentDataChanged = (existingDepartment, newDepartmentData) => {
+    const fieldsToCheck = [
+        'name',
+        'description',
+        'team_leader'
+    ];
+
+    for (const field of fieldsToCheck) {
+        const existingValue = existingDepartment[field] || '';
+        const newValue = newDepartmentData[field] || '';
+
+        if (existingValue.toString().trim() !== newValue.toString().trim()) {
+            return true;
+        }
+    }
+
+    return false;
+};
+
+// Helper function to get changed fields for department
+const getDepartmentChangedFields = (existingDepartment, newDepartmentData) => {
+    const changes = {};
+    const fieldsToCheck = [
+        'name',
+        'description',
+        'team_leader'
+    ];
+
+    for (const field of fieldsToCheck) {
+        const existingValue = existingDepartment[field] || '';
+        const newValue = newDepartmentData[field] || '';
+
+        if (existingValue.toString().trim() !== newValue.toString().trim()) {
+            changes[field] = {
+                old: existingValue,
+                new: newValue
+            };
+        }
+    }
+
+    return changes;
+};
 
 // Helper function to compare user data
 const hasUserDataChanged = (existingUser, newUserData) => {
     const fieldsToCheck = [
         'name',
-        'email', 
+        'email',
         'department',
         'position',
         'avatar',
@@ -17,12 +61,12 @@ const hasUserDataChanged = (existingUser, newUserData) => {
     for (const field of fieldsToCheck) {
         const existingValue = existingUser[field] || '';
         const newValue = newUserData[field] || '';
-        
+
         if (existingValue.toString().trim() !== newValue.toString().trim()) {
             return true;
         }
     }
-    
+
     return false;
 };
 
@@ -31,7 +75,7 @@ const getChangedFields = (existingUser, newUserData) => {
     const changes = {};
     const fieldsToCheck = [
         'name',
-        'email', 
+        'email',
         'department',
         'position',
         'avatar',
@@ -42,7 +86,7 @@ const getChangedFields = (existingUser, newUserData) => {
     for (const field of fieldsToCheck) {
         const existingValue = existingUser[field] || '';
         const newValue = newUserData[field] || '';
-        
+
         if (existingValue.toString().trim() !== newValue.toString().trim()) {
             changes[field] = {
                 old: existingValue,
@@ -50,11 +94,11 @@ const getChangedFields = (existingUser, newUserData) => {
             };
         }
     }
-    
+
     return changes;
 };
 
-const syncUser = async () => {
+const syncDatabase = async () => {
     try {
         const authResponse = await login("0596", "My123456@");
         if (!authResponse || !authResponse.accessToken) {
@@ -71,6 +115,7 @@ const syncUser = async () => {
                 Authorization: `Bearer ${token}`,
             },
         });
+
 
         const users = usersResponse.data.result || [];
         console.log(`Fetched ${users.length} users from Auth Service`);
@@ -94,7 +139,7 @@ const syncUser = async () => {
                     // Kiểm tra có thay đổi không
                     if (hasUserDataChanged(existingUser, userData)) {
                         const changedFields = getChangedFields(existingUser, userData);
-                        
+
                         // Cập nhật user hiện tại
                         await existingUser.update({
                             id: userData.id,
@@ -107,9 +152,9 @@ const syncUser = async () => {
                             sex: userData.sex,
                             updateAt: new Date()
                         });
-                        
+
                         updatedCount++;
-                        
+
                         // Optional: Log detailed changes in development
                         if (process.env.NODE_ENV === 'development') {
                             console.log('Detailed changes:', changedFields);
@@ -142,17 +187,90 @@ const syncUser = async () => {
             }
         }
 
-        console.log(`Sync completed: ${syncedCount} new users, ${updatedCount} updated users, ${skippedCount} skipped (no changes), ${errorCount} errors`);
-        
+        // Lấy danh sách departments từ Auth Service
+        const departmentsResponse = await axios.get('departments', {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        });
+
+        const departments = departmentsResponse.data.result || [];
+        console.log(`Fetched ${departments.length} departments from Auth Service`);
+
+        // Đồng bộ từng department vào database
+        let deptSyncedCount = 0;
+        let deptUpdatedCount = 0;
+        let deptSkippedCount = 0;
+        let deptErrorCount = 0;
+
+        for (const departmentData of departments) {
+            try {
+                // Kiểm tra department đã tồn tại chưa (dựa trên name)
+                const existingDepartment = await Departments.findOne({
+                    where: {
+                        name: departmentData.name
+                    }
+                });
+
+                if (existingDepartment) {
+                    // Kiểm tra có thay đổi không
+                    if (hasDepartmentDataChanged(existingDepartment, departmentData)) {
+                        const changedFields = getDepartmentChangedFields(existingDepartment, departmentData);
+
+                        // Cập nhật department hiện tại
+                        await existingDepartment.update({
+                            description: departmentData.description || '',
+                            team_leader: departmentData.team_leader || null,
+                            updated_at: new Date()
+                        });
+
+                        deptUpdatedCount++;
+
+                        // Optional: Log detailed changes in development
+                        if (process.env.NODE_ENV === 'development') {
+                            console.log(`Department ${departmentData.name} updated:`, changedFields);
+                        }
+                    } else {
+                        deptSkippedCount++;
+                    }
+                } else {
+                    // Tạo department mới
+                    await Departments.create({
+                        name: departmentData.name,
+                        description: departmentData.description || '',
+                        team_leader: departmentData.team_leader || null,
+                        created_at: new Date()
+                    });
+                    deptSyncedCount++;
+                    console.log(`Created new department: ${departmentData.name}`);
+                }
+            } catch (departmentError) {
+                console.error(`Error syncing department ${departmentData.name}:`, departmentError.message);
+                deptErrorCount++;
+            }
+        }
+
+        console.log(`User sync completed: ${syncedCount} new users, ${updatedCount} updated users, ${skippedCount} skipped (no changes), ${errorCount} errors`);
+        console.log(`Department sync completed: ${deptSyncedCount} new departments, ${deptUpdatedCount} updated departments, ${deptSkippedCount} skipped (no changes), ${deptErrorCount} errors`);
+
         return {
             success: true,
             token: token,
             stats: {
-                total: users.length,
-                created: syncedCount,
-                updated: updatedCount,
-                skipped: skippedCount,
-                errors: errorCount
+                users: {
+                    total: users.length,
+                    created: syncedCount,
+                    updated: updatedCount,
+                    skipped: skippedCount,
+                    errors: errorCount
+                },
+                departments: {
+                    total: departments.length,
+                    created: deptSyncedCount,
+                    updated: deptUpdatedCount,
+                    skipped: deptSkippedCount,
+                    errors: deptErrorCount
+                }
             }
         };
 
@@ -169,4 +287,6 @@ const syncUser = async () => {
     }
 };
 
-module.exports = syncUser;
+
+
+module.exports = syncDatabase;
