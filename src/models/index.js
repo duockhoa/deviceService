@@ -19,6 +19,18 @@ AssetCategories.hasMany(Assets, {
     as: 'Assets'
 });
 
+// Asset - Team association
+Assets.belongsTo(Departments, { 
+    foreignKey: 'team_id', 
+    targetKey: 'name',
+    as: 'Department'
+});
+Departments.hasMany(Assets, { 
+    foreignKey: 'team_id', 
+    sourceKey: 'name',
+    as: 'DepartmentAssets'
+});
+
 Assets.belongsTo(User, { 
     foreignKey: 'created_by', 
     targetKey: 'id',

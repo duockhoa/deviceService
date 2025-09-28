@@ -16,6 +16,14 @@ const Assets = sequelize.define('assets', {
             key: 'id'
         }
     },
+    team_id: {
+        type: DataTypes.STRING(255),
+        allowNull: true,
+        references: {
+            model: 'teams',
+            key: 'name'
+        }
+    },
     asset_code: {
         type: DataTypes.STRING(50),
         allowNull: false,
@@ -56,7 +64,7 @@ const Assets = sequelize.define('assets', {
     }
 }, {
     tableName: 'assets',
-    timestamps: false, // Sử dụng created_at và updated_at tự định nghĩa
+    timestamps: false,
     hooks: {
         beforeUpdate: (instance) => {
             instance.updated_at = new Date();
@@ -73,6 +81,9 @@ const Assets = sequelize.define('assets', {
         },
         {
             fields: ['category_id']
+        },
+        {
+            fields: ['team_id']
         },
         {
             fields: ['created_by']

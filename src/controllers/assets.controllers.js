@@ -1,4 +1,4 @@
-const { Assets, AssetCategories, User } = require('../models');
+const { Assets, AssetCategories, User , Departments} = require('../models');
 
 // GET /api/assets - Lấy tất cả assets
 const getAllAssets = async (req, res) => {
@@ -6,7 +6,8 @@ const getAllAssets = async (req, res) => {
         const assets = await Assets.findAll({
             include: [
                 { model: AssetCategories, as: 'Category' },
-                { model: User, as: 'Creator', attributes: ['id', 'name', 'employee_code'] }
+                { model: User, as: 'Creator', attributes: ['id', 'name', 'employee_code'] },
+                { model: Departments, as: 'Department', attributes: ['name', 'description'] }
             ]
         });
         
@@ -31,7 +32,8 @@ const getAssetById = async (req, res) => {
         const asset = await Assets.findByPk(id, {
             include: [
                 { model: AssetCategories, as: 'Category' },
-                { model: User, as: 'Creator', attributes: ['id', 'name', 'employee_code'] }
+                { model: User, as: 'Creator', attributes: ['id', 'name', 'employee_code'] },
+                { model: Departments, as: 'Department', attributes: ['id', 'name'] }
             ]
         });
 
