@@ -24,6 +24,14 @@ const Assets = sequelize.define('assets', {
             key: 'name'
         }
     },
+    position_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+            model: 'positions',
+            key: 'id'
+        }
+    },
     asset_code: {
         type: DataTypes.STRING(50),
         allowNull: false,
@@ -41,6 +49,11 @@ const Assets = sequelize.define('assets', {
         type: DataTypes.STRING(100),
         allowNull: true,
         unique: true
+    },
+    image: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+        comment: 'URL của hình ảnh tài sản (Cloudinary URL)'
     },
     notes: {
         type: DataTypes.TEXT,
@@ -84,6 +97,9 @@ const Assets = sequelize.define('assets', {
         },
         {
             fields: ['team_id']
+        },
+        {
+            fields: ['position_id']
         },
         {
             fields: ['created_by']

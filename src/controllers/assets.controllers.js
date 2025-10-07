@@ -1,4 +1,4 @@
-const { Assets, AssetCategories, User , Departments} = require('../models');
+const { Assets, AssetCategories, User, Departments, Positions, Areas, Plants } = require('../models');
 
 // GET /api/assets - Lấy tất cả assets
 const getAllAssets = async (req, res) => {
@@ -7,8 +7,28 @@ const getAllAssets = async (req, res) => {
             include: [
                 { model: AssetCategories, as: 'Category' },
                 { model: User, as: 'Creator', attributes: ['id', 'name', 'employee_code'] },
-                { model: Departments, as: 'Department', attributes: ['name', 'description'] }
-            ]
+                { model: Departments, as: 'Department', attributes: ['name', 'description'] },
+                {
+                    model: Positions,
+                    as: 'Position',
+                    attributes: ['id', 'code', 'name', 'description'],
+                    include: [
+                        {
+                            model: Areas,
+                            as: 'Area',
+                            attributes: ['id', 'code', 'name', 'description'],
+                            include: [
+                                {
+                                    model: Plants,
+                                    as: 'Plant',
+                                    attributes: ['id', 'code', 'name', 'description']
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ],
+            order: [['created_at', 'DESC']]
         });
         
         res.status(200).json({
@@ -31,9 +51,40 @@ const getAssetById = async (req, res) => {
         const { id } = req.params;
         const asset = await Assets.findByPk(id, {
             include: [
-                { model: AssetCategories, as: 'Category' },
-                { model: User, as: 'Creator', attributes: ['id', 'name', 'employee_code'] },
-                { model: Departments, as: 'Department', attributes: ['id', 'name'] }
+                { 
+                    model: AssetCategories, 
+                    as: 'Category',
+                    attributes: ['id', 'name', 'description']
+                },
+                { 
+                    model: User, 
+                    as: 'Creator', 
+                    attributes: ['id', 'name', 'employee_code', 'email']
+                },
+                { 
+                    model: Departments, 
+                    as: 'Department', 
+                    attributes: ['name', 'description', 'team_leader']
+                },
+                {
+                    model: Positions,
+                    as: 'Position',
+                    attributes: ['id', 'code', 'name', 'description'],
+                    include: [
+                        {
+                            model: Areas,
+                            as: 'Area',
+                            attributes: ['id', 'code', 'name', 'description'],
+                            include: [
+                                {
+                                    model: Plants,
+                                    as: 'Plant',
+                                    attributes: ['id', 'code', 'name', 'description']
+                                }
+                            ]
+                        }
+                    ]
+                }
             ]
         });
 
@@ -60,19 +111,86 @@ const getAssetById = async (req, res) => {
 // POST /api/assets - Tạo asset mới
 const createAsset = async (req, res) => {
     try {
+        const { 
+            category_id, 
+            team_id, 
+            position_id, 
+            asset_code, 
+            name, 
+            description, 
+            serial_number,
+            image,
+            notes 
+        } = req.body;
+
+        // Validation
+        if (!category_id || !asset_code || !name) {
+            return res.status(400).json({
+                success: false,
+                message: 'Category ID, Asset Code, and Name are required'
+            });
+        }
+
+        // Kiểm tra asset_code đã tồn tại chưa
+        const existingAsset = await Assets.findOne({
+            where: { asset_code }
+        });
+
+        if (existingAsset) {
+            return res.status(409).json({
+                success: false,
+                message: 'Asset code already exists'
+            });
+        }
+
         const assetData = {
-            ...req.body,
-            created_by: req.user.id // Từ auth middleware
+            category_id,
+            team_id,
+            position_id,
+            asset_code,
+            name,
+            description,
+            serial_number,
+            image,
+            notes,
+            created_by: req.user?.id || 1 // Từ auth middleware hoặc default
         };
 
         const newAsset = await Assets.create(assetData);
         
+        // Lấy asset mới tạo với đầy đủ thông tin
+        const assetWithDetails = await Assets.findByPk(newAsset.id, {
+            include: [
+                { model: AssetCategories, as: 'Category' },
+                { model: User, as: 'Creator', attributes: ['id', 'name', 'employee_code'] },
+                { model: Departments, as: 'Department' },
+                {
+                    model: Positions,
+                    as: 'Position',
+                    include: [
+                        {
+                            model: Areas,
+                            as: 'Area',
+                            include: [{ model: Plants, as: 'Plant' }]
+                        }
+                    ]
+                }
+            ]
+        });
+        
         res.status(201).json({
             success: true,
             message: 'Asset created successfully',
-            data: newAsset
+            data: assetWithDetails
         });
     } catch (error) {
+        if (error.name === 'SequelizeUniqueConstraintError') {
+            return res.status(409).json({
+                success: false,
+                message: 'Asset code or serial number already exists'
+            });
+        }
+
         res.status(400).json({
             success: false,
             message: 'Error creating asset',
@@ -94,14 +212,55 @@ const updateAsset = async (req, res) => {
             });
         }
 
+        // Kiểm tra asset_code trùng (nếu có thay đổi)
+        if (req.body.asset_code && req.body.asset_code !== asset.asset_code) {
+            const existingAsset = await Assets.findOne({
+                where: { asset_code: req.body.asset_code }
+            });
+
+            if (existingAsset) {
+                return res.status(409).json({
+                    success: false,
+                    message: 'Asset code already exists'
+                });
+            }
+        }
+
         await asset.update(req.body);
+
+        // Lấy asset đã cập nhật với đầy đủ thông tin
+        const updatedAsset = await Assets.findByPk(id, {
+            include: [
+                { model: AssetCategories, as: 'Category' },
+                { model: User, as: 'Creator', attributes: ['id', 'name', 'employee_code'] },
+                { model: Departments, as: 'Department' },
+                {
+                    model: Positions,
+                    as: 'Position',
+                    include: [
+                        {
+                            model: Areas,
+                            as: 'Area',
+                            include: [{ model: Plants, as: 'Plant' }]
+                        }
+                    ]
+                }
+            ]
+        });
 
         res.status(200).json({
             success: true,
             message: 'Asset updated successfully',
-            data: asset
+            data: updatedAsset
         });
     } catch (error) {
+        if (error.name === 'SequelizeUniqueConstraintError') {
+            return res.status(409).json({
+                success: false,
+                message: 'Asset code or serial number already exists'
+            });
+        }
+
         res.status(400).json({
             success: false,
             message: 'Error updating asset',
@@ -138,10 +297,233 @@ const deleteAsset = async (req, res) => {
     }
 };
 
+// GET /api/assets/by-position/:positionId - Lấy assets theo position
+const getAssetsByPosition = async (req, res) => {
+    try {
+        const { positionId } = req.params;
+
+        const assets = await Assets.findAll({
+            where: { position_id: positionId },
+            include: [
+                { model: AssetCategories, as: 'Category' },
+                { model: Departments, as: 'Department' },
+                {
+                    model: Positions,
+                    as: 'Position',
+                    include: [
+                        {
+                            model: Areas,
+                            as: 'Area',
+                            include: [{ model: Plants, as: 'Plant' }]
+                        }
+                    ]
+                }
+            ]
+        });
+
+        res.status(200).json({
+            success: true,
+            data: assets,
+            count: assets.length
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching assets by position',
+            error: error.message
+        });
+    }
+};
+
+// GET /api/assets/by-category/:categoryId - Lấy assets theo category
+const getAssetsByCategory = async (req, res) => {
+    try {
+        const { categoryId } = req.params;
+
+        const assets = await Assets.findAll({
+            where: { category_id: categoryId },
+            include: [
+                { model: AssetCategories, as: 'Category' },
+                { model: Departments, as: 'Department' },
+                {
+                    model: Positions,
+                    as: 'Position',
+                    include: [
+                        {
+                            model: Areas,
+                            as: 'Area',
+                            include: [{ model: Plants, as: 'Plant' }]
+                        }
+                    ]
+                }
+            ]
+        });
+
+        res.status(200).json({
+            success: true,
+            data: assets,
+            count: assets.length
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching assets by category',
+            error: error.message
+        });
+    }
+};
+
+// GET /api/assets/by-department/:departmentName - Lấy assets theo department
+const getAssetsByDepartment = async (req, res) => {
+    try {
+        const { departmentName } = req.params;
+
+        const assets = await Assets.findAll({
+            where: { team_id: departmentName },
+            include: [
+                { model: AssetCategories, as: 'Category' },
+                { model: Departments, as: 'Department' },
+                {
+                    model: Positions,
+                    as: 'Position',
+                    include: [
+                        {
+                            model: Areas,
+                            as: 'Area',
+                            include: [{ model: Plants, as: 'Plant' }]
+                        }
+                    ]
+                }
+            ]
+        });
+
+        res.status(200).json({
+            success: true,
+            data: assets,
+            count: assets.length
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching assets by department',
+            error: error.message
+        });
+    }
+};
+
+// GET /api/assets/search - Tìm kiếm assets
+const searchAssets = async (req, res) => {
+    try {
+        const { query, category_id, team_id, position_id } = req.query;
+        
+        let whereCondition = {};
+        
+        // Thêm điều kiện tìm kiếm theo text
+        if (query) {
+            whereCondition = {
+                [require('sequelize').Op.or]: [
+                    { name: { [require('sequelize').Op.like]: `%${query}%` } },
+                    { asset_code: { [require('sequelize').Op.like]: `%${query}%` } },
+                    { description: { [require('sequelize').Op.like]: `%${query}%` } },
+                    { serial_number: { [require('sequelize').Op.like]: `%${query}%` } }
+                ]
+            };
+        }
+        
+        // Thêm điều kiện filter
+        if (category_id) whereCondition.category_id = category_id;
+        if (team_id) whereCondition.team_id = team_id;
+        if (position_id) whereCondition.position_id = position_id;
+
+        const assets = await Assets.findAll({
+            where: whereCondition,
+            include: [
+                { model: AssetCategories, as: 'Category' },
+                { model: Departments, as: 'Department' },
+                {
+                    model: Positions,
+                    as: 'Position',
+                    include: [
+                        {
+                            model: Areas,
+                            as: 'Area',
+                            include: [{ model: Plants, as: 'Plant' }]
+                        }
+                    ]
+                }
+            ],
+            order: [['created_at', 'DESC']]
+        });
+
+        res.status(200).json({
+            success: true,
+            data: assets,
+            count: assets.length,
+            query: req.query
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error searching assets',
+            error: error.message
+        });
+    }
+};
+
+// GET /api/assets/by-asset-code/:assetCode - Lấy asset theo asset code
+const getAssetByCode = async (req, res) => {
+    try {
+        const { assetCode } = req.params;
+        const asset = await Assets.findOne({
+            where: { asset_code: assetCode },
+            include: [
+                { model: AssetCategories, as: 'Category' },
+                { model: User, as: 'Creator', attributes: ['id', 'name', 'employee_code'] },
+                { model: Departments, as: 'Department' },
+                {
+                    model: Positions,
+                    as: 'Position',
+                    include: [
+                        {
+                            model: Areas,
+                            as: 'Area',
+                            include: [{ model: Plants, as: 'Plant' }]
+                        }
+                    ]
+                }
+            ]
+        });
+
+        if (!asset) {
+            return res.status(404).json({
+                success: false,
+                message: 'Asset not found'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: asset
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching asset by code',
+            error: error.message
+        });
+    }
+};
+
+// Cập nhật exports
 module.exports = {
     getAllAssets,
     getAssetById,
     createAsset,
     updateAsset,
-    deleteAsset
+    deleteAsset,
+    getAssetsByPosition,
+    getAssetsByCategory,
+    getAssetsByDepartment,
+    searchAssets,
+    getAssetByCode
 };

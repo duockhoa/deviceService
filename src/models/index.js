@@ -2,6 +2,9 @@ const { User } = require('./user.model');
 const { Departments } = require('./department');
 const { AssetCategories } = require('./assetCategories');
 const { Assets } = require('./assets.model');
+const { Plants } = require('./plants.model');
+const { Areas } = require('./areas.model');
+const { Positions } = require('./positions.model');
 
 // Define associations
 User.belongsTo(Departments, { foreignKey: 'department', targetKey: 'name' });
@@ -31,6 +34,18 @@ Departments.hasMany(Assets, {
     as: 'DepartmentAssets'
 });
 
+// Asset - Position association
+Assets.belongsTo(Positions, {
+    foreignKey: 'position_id',
+    targetKey: 'id',
+    as: 'Position'
+});
+Positions.hasMany(Assets, {
+    foreignKey: 'position_id',
+    sourceKey: 'id',
+    as: 'Assets'
+});
+
 Assets.belongsTo(User, { 
     foreignKey: 'created_by', 
     targetKey: 'id',
@@ -42,9 +57,36 @@ User.hasMany(Assets, {
     as: 'CreatedAssets'
 });
 
+// Plants - Areas associations
+Areas.belongsTo(Plants, {
+    foreignKey: 'plant_id',
+    targetKey: 'id',
+    as: 'Plant'
+});
+Plants.hasMany(Areas, {
+    foreignKey: 'plant_id',
+    sourceKey: 'id',
+    as: 'Areas'
+});
+
+// Areas - Positions associations
+Positions.belongsTo(Areas, {
+    foreignKey: 'area_id',
+    targetKey: 'id',
+    as: 'Area'
+});
+Areas.hasMany(Positions, {
+    foreignKey: 'area_id',
+    sourceKey: 'id',
+    as: 'Positions'
+});
+
 module.exports = {
     User,
     Departments,
     AssetCategories,
-    Assets
+    Assets,
+    Plants,
+    Areas,
+    Positions
 };
