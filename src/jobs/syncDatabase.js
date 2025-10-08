@@ -100,7 +100,7 @@ const getChangedFields = (existingUser, newUserData) => {
 
 const syncDatabase = async () => {
     try {
-        const authResponse = await login("0596", "My123456@");
+        const authResponse = await login("K01", "Da123456@");
         if (!authResponse || !authResponse.accessToken) {
             console.error("Login failed: No access token received");
             return null;
