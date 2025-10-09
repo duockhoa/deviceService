@@ -45,19 +45,10 @@ const Assets = sequelize.define('assets', {
         type: DataTypes.TEXT,
         allowNull: true
     },
-    serial_number: {
-        type: DataTypes.STRING(100),
-        allowNull: true,
-        unique: true
-    },
     image: {
         type: DataTypes.TEXT,
         allowNull: true,
         comment: 'URL của hình ảnh tài sản (Cloudinary URL)'
-    },
-    notes: {
-        type: DataTypes.TEXT,
-        allowNull: true
     },
     created_by: {
         type: DataTypes.INTEGER,
@@ -87,10 +78,6 @@ const Assets = sequelize.define('assets', {
         {
             unique: true,
             fields: ['asset_code']
-        },
-        {
-            unique: true,
-            fields: ['serial_number']
         },
         {
             fields: ['category_id']

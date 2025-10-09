@@ -30,7 +30,7 @@ const getAssetCategoryById = async (req, res) => {
                 {
                     model: Assets,
                     as: 'Assets',
-                    attributes: ['id', 'name', 'asset_code', 'description', 'serial_number']
+                    attributes: ['id', 'name', 'asset_code', 'description']
                 }
             ]
         });
@@ -216,8 +216,8 @@ const getAssetsByCategory = async (req, res) => {
         const assets = await Assets.findAll({
             where: { category_id: id },
             include: [
-                { 
-                    model: AssetCategories, 
+                {
+                    model: AssetCategories,
                     as: 'Category',
                     attributes: ['id', 'name']
                 }

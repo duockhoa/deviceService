@@ -100,13 +100,12 @@ const createAsset = async (req, res) => {
         const {
             category_id,
             team_id,
-            area_id,  // Thay đổi từ position_id sang area_id
+            area_id,
             asset_code,
             name,
             description,
-            serial_number,
-            image,
-            notes
+            image
+            // Bỏ serial_number và notes
         } = req.body;
 
         // Validation
@@ -132,14 +131,13 @@ const createAsset = async (req, res) => {
         const assetData = {
             category_id,
             team_id,
-            area_id,  // Thay đổi từ position_id sang area_id
+            area_id,
             asset_code,
             name,
             description,
-            serial_number,
             image,
-            notes,
-            created_by: req.user?.id || 1 // Từ auth middleware hoặc default
+            // Bỏ serial_number và notes
+            created_by: req.user?.id || 1
         };
 
         const newAsset = await Assets.create(assetData);
@@ -167,7 +165,7 @@ const createAsset = async (req, res) => {
         if (error.name === 'SequelizeUniqueConstraintError') {
             return res.status(409).json({
                 success: false,
-                message: 'Asset code or serial number already exists'
+                message: 'Asset code already exists'  // Bỏ "or serial number"
             });
         }
 
@@ -231,7 +229,7 @@ const updateAsset = async (req, res) => {
         if (error.name === 'SequelizeUniqueConstraintError') {
             return res.status(409).json({
                 success: false,
-                message: 'Asset code or serial number already exists'
+                message: 'Asset code already exists'  // Bỏ "or serial number"
             });
         }
 
