@@ -104,7 +104,8 @@ const createAsset = async (req, res) => {
             asset_code,
             name,
             description,
-            image
+            image,
+            created_by
             // Bỏ serial_number và notes
         } = req.body;
 
@@ -137,7 +138,7 @@ const createAsset = async (req, res) => {
             description,
             image,
             // Bỏ serial_number và notes
-            created_by: req.user?.id || 1
+            created_by
         };
 
         const newAsset = await Assets.create(assetData);
