@@ -4,55 +4,54 @@ const { AssetCategories } = require('./assetCategories');
 const { Assets } = require('./assets.model');
 const { Plants } = require('./plants.model');
 const { Areas } = require('./areas.model');
-const { Positions } = require('./positions.model');
 
 // Define associations
 User.belongsTo(Departments, { foreignKey: 'department', targetKey: 'name' });
 Departments.hasMany(User, { foreignKey: 'department', sourceKey: 'name' });
 
 // Asset associations
-Assets.belongsTo(AssetCategories, { 
-    foreignKey: 'category_id', 
+Assets.belongsTo(AssetCategories, {
+    foreignKey: 'category_id',
     targetKey: 'id',
     as: 'Category'
 });
-AssetCategories.hasMany(Assets, { 
-    foreignKey: 'category_id', 
+AssetCategories.hasMany(Assets, {
+    foreignKey: 'category_id',
     sourceKey: 'id',
     as: 'Assets'
 });
 
 // Asset - Team association
-Assets.belongsTo(Departments, { 
-    foreignKey: 'team_id', 
+Assets.belongsTo(Departments, {
+    foreignKey: 'team_id',
     targetKey: 'name',
     as: 'Department'
 });
-Departments.hasMany(Assets, { 
-    foreignKey: 'team_id', 
+Departments.hasMany(Assets, {
+    foreignKey: 'team_id',
     sourceKey: 'name',
     as: 'DepartmentAssets'
 });
 
-// Asset - Position association
-Assets.belongsTo(Positions, {
-    foreignKey: 'position_id',
+// Asset - Area association (thay đổi từ Position sang Area)
+Assets.belongsTo(Areas, {
+    foreignKey: 'area_id',
     targetKey: 'id',
-    as: 'Position'
+    as: 'Area'
 });
-Positions.hasMany(Assets, {
-    foreignKey: 'position_id',
+Areas.hasMany(Assets, {
+    foreignKey: 'area_id',
     sourceKey: 'id',
     as: 'Assets'
 });
 
-Assets.belongsTo(User, { 
-    foreignKey: 'created_by', 
+Assets.belongsTo(User, {
+    foreignKey: 'created_by',
     targetKey: 'id',
     as: 'Creator'
 });
-User.hasMany(Assets, { 
-    foreignKey: 'created_by', 
+User.hasMany(Assets, {
+    foreignKey: 'created_by',
     sourceKey: 'id',
     as: 'CreatedAssets'
 });
@@ -69,17 +68,7 @@ Plants.hasMany(Areas, {
     as: 'Areas'
 });
 
-// Areas - Positions associations
-Positions.belongsTo(Areas, {
-    foreignKey: 'area_id',
-    targetKey: 'id',
-    as: 'Area'
-});
-Areas.hasMany(Positions, {
-    foreignKey: 'area_id',
-    sourceKey: 'id',
-    as: 'Positions'
-});
+// Bỏ tất cả associations liên quan đến Positions
 
 module.exports = {
     User,
@@ -87,6 +76,5 @@ module.exports = {
     AssetCategories,
     Assets,
     Plants,
-    Areas,
-    Positions
+    Areas
 };

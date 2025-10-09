@@ -1,4 +1,4 @@
-const { Assets, AssetCategories, User, Departments, Positions, Areas, Plants } = require('../models');
+const { Assets, AssetCategories, User, Departments, Areas, Plants } = require('../models');
 
 // GET /api/assets - Lấy tất cả assets
 const getAllAssets = async (req, res) => {
@@ -9,28 +9,21 @@ const getAllAssets = async (req, res) => {
                 { model: User, as: 'Creator', attributes: ['id', 'name', 'employee_code'] },
                 { model: Departments, as: 'Department', attributes: ['name', 'description'] },
                 {
-                    model: Positions,
-                    as: 'Position',
+                    model: Areas,
+                    as: 'Area',
                     attributes: ['id', 'code', 'name', 'description'],
                     include: [
                         {
-                            model: Areas,
-                            as: 'Area',
-                            attributes: ['id', 'code', 'name', 'description'],
-                            include: [
-                                {
-                                    model: Plants,
-                                    as: 'Plant',
-                                    attributes: ['id', 'code', 'name', 'description']
-                                }
-                            ]
+                            model: Plants,
+                            as: 'Plant',
+                            attributes: ['id', 'code', 'name', 'description']
                         }
                     ]
                 }
             ],
             order: [['created_at', 'DESC']]
         });
-        
+
         res.status(200).json({
             success: true,
             data: assets,
@@ -51,37 +44,30 @@ const getAssetById = async (req, res) => {
         const { id } = req.params;
         const asset = await Assets.findByPk(id, {
             include: [
-                { 
-                    model: AssetCategories, 
+                {
+                    model: AssetCategories,
                     as: 'Category',
                     attributes: ['id', 'name', 'description']
                 },
-                { 
-                    model: User, 
-                    as: 'Creator', 
+                {
+                    model: User,
+                    as: 'Creator',
                     attributes: ['id', 'name', 'employee_code', 'email']
                 },
-                { 
-                    model: Departments, 
-                    as: 'Department', 
+                {
+                    model: Departments,
+                    as: 'Department',
                     attributes: ['name', 'description', 'team_leader']
                 },
                 {
-                    model: Positions,
-                    as: 'Position',
+                    model: Areas,
+                    as: 'Area',
                     attributes: ['id', 'code', 'name', 'description'],
                     include: [
                         {
-                            model: Areas,
-                            as: 'Area',
-                            attributes: ['id', 'code', 'name', 'description'],
-                            include: [
-                                {
-                                    model: Plants,
-                                    as: 'Plant',
-                                    attributes: ['id', 'code', 'name', 'description']
-                                }
-                            ]
+                            model: Plants,
+                            as: 'Plant',
+                            attributes: ['id', 'code', 'name', 'description']
                         }
                     ]
                 }
@@ -111,16 +97,16 @@ const getAssetById = async (req, res) => {
 // POST /api/assets - Tạo asset mới
 const createAsset = async (req, res) => {
     try {
-        const { 
-            category_id, 
-            team_id, 
-            position_id, 
-            asset_code, 
-            name, 
-            description, 
+        const {
+            category_id,
+            team_id,
+            area_id,  // Thay đổi từ position_id sang area_id
+            asset_code,
+            name,
+            description,
             serial_number,
             image,
-            notes 
+            notes
         } = req.body;
 
         // Validation
@@ -146,7 +132,7 @@ const createAsset = async (req, res) => {
         const assetData = {
             category_id,
             team_id,
-            position_id,
+            area_id,  // Thay đổi từ position_id sang area_id
             asset_code,
             name,
             description,
@@ -157,7 +143,7 @@ const createAsset = async (req, res) => {
         };
 
         const newAsset = await Assets.create(assetData);
-        
+
         // Lấy asset mới tạo với đầy đủ thông tin
         const assetWithDetails = await Assets.findByPk(newAsset.id, {
             include: [
@@ -165,19 +151,13 @@ const createAsset = async (req, res) => {
                 { model: User, as: 'Creator', attributes: ['id', 'name', 'employee_code'] },
                 { model: Departments, as: 'Department' },
                 {
-                    model: Positions,
-                    as: 'Position',
-                    include: [
-                        {
-                            model: Areas,
-                            as: 'Area',
-                            include: [{ model: Plants, as: 'Plant' }]
-                        }
-                    ]
+                    model: Areas,
+                    as: 'Area',
+                    include: [{ model: Plants, as: 'Plant' }]
                 }
             ]
         });
-        
+
         res.status(201).json({
             success: true,
             message: 'Asset created successfully',
@@ -235,15 +215,9 @@ const updateAsset = async (req, res) => {
                 { model: User, as: 'Creator', attributes: ['id', 'name', 'employee_code'] },
                 { model: Departments, as: 'Department' },
                 {
-                    model: Positions,
-                    as: 'Position',
-                    include: [
-                        {
-                            model: Areas,
-                            as: 'Area',
-                            include: [{ model: Plants, as: 'Plant' }]
-                        }
-                    ]
+                    model: Areas,
+                    as: 'Area',
+                    include: [{ model: Plants, as: 'Plant' }]
                 }
             ]
         });
@@ -297,26 +271,20 @@ const deleteAsset = async (req, res) => {
     }
 };
 
-// GET /api/assets/by-position/:positionId - Lấy assets theo position
-const getAssetsByPosition = async (req, res) => {
+// GET /api/assets/by-area/:areaId - Lấy assets theo area (thay đổi từ position)
+const getAssetsByArea = async (req, res) => {
     try {
-        const { positionId } = req.params;
+        const { areaId } = req.params;
 
         const assets = await Assets.findAll({
-            where: { position_id: positionId },
+            where: { area_id: areaId },
             include: [
                 { model: AssetCategories, as: 'Category' },
                 { model: Departments, as: 'Department' },
                 {
-                    model: Positions,
-                    as: 'Position',
-                    include: [
-                        {
-                            model: Areas,
-                            as: 'Area',
-                            include: [{ model: Plants, as: 'Plant' }]
-                        }
-                    ]
+                    model: Areas,
+                    as: 'Area',
+                    include: [{ model: Plants, as: 'Plant' }]
                 }
             ]
         });
@@ -329,7 +297,7 @@ const getAssetsByPosition = async (req, res) => {
     } catch (error) {
         res.status(500).json({
             success: false,
-            message: 'Error fetching assets by position',
+            message: 'Error fetching assets by area',
             error: error.message
         });
     }
@@ -346,15 +314,9 @@ const getAssetsByCategory = async (req, res) => {
                 { model: AssetCategories, as: 'Category' },
                 { model: Departments, as: 'Department' },
                 {
-                    model: Positions,
-                    as: 'Position',
-                    include: [
-                        {
-                            model: Areas,
-                            as: 'Area',
-                            include: [{ model: Plants, as: 'Plant' }]
-                        }
-                    ]
+                    model: Areas,
+                    as: 'Area',
+                    include: [{ model: Plants, as: 'Plant' }]
                 }
             ]
         });
@@ -384,15 +346,9 @@ const getAssetsByDepartment = async (req, res) => {
                 { model: AssetCategories, as: 'Category' },
                 { model: Departments, as: 'Department' },
                 {
-                    model: Positions,
-                    as: 'Position',
-                    include: [
-                        {
-                            model: Areas,
-                            as: 'Area',
-                            include: [{ model: Plants, as: 'Plant' }]
-                        }
-                    ]
+                    model: Areas,
+                    as: 'Area',
+                    include: [{ model: Plants, as: 'Plant' }]
                 }
             ]
         });
@@ -414,10 +370,10 @@ const getAssetsByDepartment = async (req, res) => {
 // GET /api/assets/search - Tìm kiếm assets
 const searchAssets = async (req, res) => {
     try {
-        const { query, category_id, team_id, position_id } = req.query;
-        
+        const { query, category_id, team_id, area_id } = req.query; // Thay đổi từ position_id sang area_id
+
         let whereCondition = {};
-        
+
         // Thêm điều kiện tìm kiếm theo text
         if (query) {
             whereCondition = {
@@ -429,11 +385,11 @@ const searchAssets = async (req, res) => {
                 ]
             };
         }
-        
+
         // Thêm điều kiện filter
         if (category_id) whereCondition.category_id = category_id;
         if (team_id) whereCondition.team_id = team_id;
-        if (position_id) whereCondition.position_id = position_id;
+        if (area_id) whereCondition.area_id = area_id; // Thay đổi từ position_id sang area_id
 
         const assets = await Assets.findAll({
             where: whereCondition,
@@ -441,15 +397,9 @@ const searchAssets = async (req, res) => {
                 { model: AssetCategories, as: 'Category' },
                 { model: Departments, as: 'Department' },
                 {
-                    model: Positions,
-                    as: 'Position',
-                    include: [
-                        {
-                            model: Areas,
-                            as: 'Area',
-                            include: [{ model: Plants, as: 'Plant' }]
-                        }
-                    ]
+                    model: Areas,
+                    as: 'Area',
+                    include: [{ model: Plants, as: 'Plant' }]
                 }
             ],
             order: [['created_at', 'DESC']]
@@ -481,15 +431,9 @@ const getAssetByCode = async (req, res) => {
                 { model: User, as: 'Creator', attributes: ['id', 'name', 'employee_code'] },
                 { model: Departments, as: 'Department' },
                 {
-                    model: Positions,
-                    as: 'Position',
-                    include: [
-                        {
-                            model: Areas,
-                            as: 'Area',
-                            include: [{ model: Plants, as: 'Plant' }]
-                        }
-                    ]
+                    model: Areas,
+                    as: 'Area',
+                    include: [{ model: Plants, as: 'Plant' }]
                 }
             ]
         });
@@ -521,7 +465,7 @@ module.exports = {
     createAsset,
     updateAsset,
     deleteAsset,
-    getAssetsByPosition,
+    getAssetsByArea,      // Thay đổi từ getAssetsByPosition
     getAssetsByCategory,
     getAssetsByDepartment,
     searchAssets,

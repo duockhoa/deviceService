@@ -24,11 +24,11 @@ const Assets = sequelize.define('assets', {
             key: 'name'
         }
     },
-    position_id: {
+    area_id: {  // Thay đổi từ position_id sang area_id
         type: DataTypes.INTEGER,
         allowNull: true,
         references: {
-            model: 'positions',
+            model: 'areas',
             key: 'id'
         }
     },
@@ -99,7 +99,7 @@ const Assets = sequelize.define('assets', {
             fields: ['team_id']
         },
         {
-            fields: ['position_id']
+            fields: ['area_id']  // Thay đổi từ position_id
         },
         {
             fields: ['created_by']

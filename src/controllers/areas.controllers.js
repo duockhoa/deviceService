@@ -1,4 +1,4 @@
-const { Areas, Plants, Positions } = require('../models');
+const { Areas, Plants, Assets } = require('../models'); // Bỏ Positions
 
 // GET /api/areas - Lấy tất cả areas
 const getAllAreas = async (req, res) => {
@@ -11,9 +11,9 @@ const getAllAreas = async (req, res) => {
                     attributes: ['id', 'code', 'name', 'description']
                 },
                 {
-                    model: Positions,
-                    as: 'Positions',
-                    attributes: ['id', 'code', 'name'],
+                    model: Assets,
+                    as: 'Assets',
+                    attributes: ['id', 'asset_code', 'name'],
                     required: false
                 }
             ],
@@ -46,9 +46,9 @@ const getAreaById = async (req, res) => {
                     attributes: ['id', 'code', 'name', 'description']
                 },
                 {
-                    model: Positions,
-                    as: 'Positions',
-                    attributes: ['id', 'code', 'name', 'description']
+                    model: Assets,
+                    as: 'Assets',
+                    attributes: ['id', 'asset_code', 'name', 'description']
                 }
             ]
         });
@@ -193,7 +193,7 @@ const updateArea = async (req, res) => {
         const updatedArea = await Areas.findByPk(id, {
             include: [
                 { model: Plants, as: 'Plant' },
-                { model: Positions, as: 'Positions' }
+                { model: Assets, as: 'Assets' }
             ]
         });
 
@@ -218,13 +218,15 @@ const updateArea = async (req, res) => {
     }
 };
 
-// DELETE /api/areas/:id - Xóa area
+// DELETE /api/areas/:id - Xóa area (chỉ kiểm tra Assets)
 const deleteArea = async (req, res) => {
     try {
         const { id } = req.params;
 
         const area = await Areas.findByPk(id, {
-            include: [{ model: Positions, as: 'Positions' }]
+            include: [
+                { model: Assets, as: 'Assets' }
+            ]
         });
 
         if (!area) {
@@ -234,11 +236,11 @@ const deleteArea = async (req, res) => {
             });
         }
 
-        // Kiểm tra xem có position nào thuộc area này không
-        if (area.Positions && area.Positions.length > 0) {
+        // Chỉ kiểm tra assets
+        if (area.Assets && area.Assets.length > 0) {
             return res.status(409).json({
                 success: false,
-                message: `Cannot delete area. It has ${area.Positions.length} position(s) assigned to it.`
+                message: `Cannot delete area. It has ${area.Assets.length} asset(s) assigned to it.`
             });
         }
 
@@ -279,9 +281,10 @@ const getAreasByPlant = async (req, res) => {
                     attributes: ['id', 'code', 'name']
                 },
                 {
-                    model: Positions,
-                    as: 'Positions',
-                    attributes: ['id', 'code', 'name']
+                    model: Assets,
+                    as: 'Assets',
+                    attributes: ['id', 'asset_code', 'name'],
+                    required: false
                 }
             ],
             order: [['name', 'ASC']]
@@ -304,8 +307,8 @@ const getAreasByPlant = async (req, res) => {
     }
 };
 
-// GET /api/areas/:id/positions - Lấy tất cả positions thuộc area
-const getPositionsByArea = async (req, res) => {
+// GET /api/areas/:id/assets - Lấy tất cả assets thuộc area
+const getAssetsByArea = async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -317,30 +320,37 @@ const getPositionsByArea = async (req, res) => {
             });
         }
 
-        const positions = await Positions.findAll({
+        const assets = await Assets.findAll({
             where: { area_id: id },
             include: [
                 {
                     model: Areas,
                     as: 'Area',
-                    attributes: ['id', 'code', 'name']
+                    attributes: ['id', 'code', 'name'],
+                    include: [
+                        {
+                            model: Plants,
+                            as: 'Plant',
+                            attributes: ['id', 'code', 'name']
+                        }
+                    ]
                 }
             ],
-            order: [['name', 'ASC']]
+            order: [['created_at', 'DESC']]
         });
 
         res.status(200).json({
             success: true,
             data: {
                 area: area,
-                positions: positions,
-                count: positions.length
+                assets: assets,
+                count: assets.length
             }
         });
     } catch (error) {
         res.status(500).json({
             success: false,
-            message: 'Error fetching positions by area',
+            message: 'Error fetching assets by area',
             error: error.message
         });
     }
@@ -353,5 +363,5 @@ module.exports = {
     updateArea,
     deleteArea,
     getAreasByPlant,
-    getPositionsByArea
+    getAssetsByArea
 };

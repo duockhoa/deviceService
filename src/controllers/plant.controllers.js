@@ -1,4 +1,4 @@
-const { Plants, Areas, Positions } = require('../models');
+const { Plants, Areas } = require('../models'); // Bỏ Positions
 
 // GET /api/plants - Lấy tất cả plants
 const getAllPlants = async (req, res) => {
@@ -9,15 +9,7 @@ const getAllPlants = async (req, res) => {
                     model: Areas,
                     as: 'Areas',
                     attributes: ['id', 'code', 'name'],
-                    required: false,
-                    include: [
-                        {
-                            model: Positions,
-                            as: 'Positions',
-                            attributes: ['id', 'code', 'name'],
-                            required: false
-                        }
-                    ]
+                    required: false
                 }
             ],
             order: [['name', 'ASC']]
@@ -46,14 +38,7 @@ const getPlantById = async (req, res) => {
                 {
                     model: Areas,
                     as: 'Areas',
-                    attributes: ['id', 'code', 'name', 'description'],
-                    include: [
-                        {
-                            model: Positions,
-                            as: 'Positions',
-                            attributes: ['id', 'code', 'name', 'description']
-                        }
-                    ]
+                    attributes: ['id', 'code', 'name', 'description']
                 }
             ]
         });
@@ -256,11 +241,6 @@ const getAreasByPlant = async (req, res) => {
                     model: Plants,
                     as: 'Plant',
                     attributes: ['id', 'code', 'name']
-                },
-                {
-                    model: Positions,
-                    as: 'Positions',
-                    attributes: ['id', 'code', 'name']
                 }
             ],
             order: [['name', 'ASC']]
@@ -293,14 +273,7 @@ const getPlantByCode = async (req, res) => {
                 {
                     model: Areas,
                     as: 'Areas',
-                    attributes: ['id', 'code', 'name', 'description'],
-                    include: [
-                        {
-                            model: Positions,
-                            as: 'Positions',
-                            attributes: ['id', 'code', 'name']
-                        }
-                    ]
+                    attributes: ['id', 'code', 'name', 'description']
                 }
             ]
         });

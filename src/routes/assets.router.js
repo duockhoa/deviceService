@@ -1,12 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const { 
-    getAssetById, 
-    getAllAssets, 
-    createAsset, 
-    deleteAsset, 
-    updateAsset, 
-    getAssetsByPosition,
+const {
+    getAssetById,
+    getAllAssets,
+    createAsset,
+    deleteAsset,
+    updateAsset,
+    getAssetsByArea,        // Thay đổi từ getAssetsByPosition
     getAssetsByCategory,
     getAssetsByDepartment,
     searchAssets,
@@ -17,7 +17,7 @@ const {
 router.get('/', getAllAssets);
 router.get('/search', searchAssets); // Đặt trước /:id để tránh conflict
 router.get('/by-code/:assetCode', getAssetByCode);
-router.get('/by-position/:positionId', getAssetsByPosition);
+router.get('/by-area/:areaId', getAssetsByArea);              // Thay đổi từ by-position
 router.get('/by-category/:categoryId', getAssetsByCategory);
 router.get('/by-department/:departmentName', getAssetsByDepartment);
 router.get('/:id', getAssetById);
