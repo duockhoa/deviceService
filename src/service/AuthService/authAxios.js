@@ -1,7 +1,9 @@
+require("dotenv").config();
 const axios = require("axios");
 
+
 const authAxios = axios.create({
-  baseURL: "https://auth.dkpharma.io.vn/api/v1", // Replace with your Auth API base URL
+  baseURL: process.env.AUTH_SERVICE_URL + '/api/v1', // Replace with your Auth API base URL
   timeout: 10000, // Set a timeout limit for requests
   headers: {
     "Content-Type": "application/json",

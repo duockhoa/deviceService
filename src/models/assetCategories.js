@@ -8,6 +8,12 @@ const AssetCategories = sequelize.define('asset_categories', {
         autoIncrement: true,
         allowNull: false
     },
+    code: {
+        type: DataTypes.STRING(50),
+        allowNull: false,
+        unique: true,
+        comment: 'Mã loại thiết bị (ví dụ: TBSX, TBCNTT, TBKN, TBVP, PTGT)'
+    },
     name: {
         type: DataTypes.STRING(255),
         allowNull: false,
@@ -32,7 +38,17 @@ const AssetCategories = sequelize.define('asset_categories', {
         beforeUpdate: (instance) => {
             instance.updated_at = new Date();
         }
-    }
+    },
+    indexes: [
+        {
+            unique: true,
+            fields: ['code']
+        },
+        {
+            unique: true,
+            fields: ['name']
+        }
+    ]
 });
 
 module.exports = {

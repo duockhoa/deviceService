@@ -41,9 +41,11 @@ const Assets = sequelize.define('assets', {
         type: DataTypes.STRING(255),
         allowNull: false
     },
-    description: {
-        type: DataTypes.TEXT,
-        allowNull: true
+    status: {
+        type: DataTypes.ENUM('active', 'inactive'),
+        allowNull: false,
+        defaultValue: 'active',
+        comment: 'Trạng thái hoạt động của thiết bị'
     },
     image: {
         type: DataTypes.TEXT,
@@ -86,10 +88,13 @@ const Assets = sequelize.define('assets', {
             fields: ['team_id']
         },
         {
-            fields: ['area_id']  // Thay đổi từ position_id
+            fields: ['area_id']
         },
         {
             fields: ['created_by']
+        },
+        {
+            fields: ['status']
         }
     ]
 });

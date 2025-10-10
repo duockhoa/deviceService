@@ -4,6 +4,7 @@ const { AssetCategories } = require('./assetCategories');
 const { Assets } = require('./assets.model');
 const { Plants } = require('./plants.model');
 const { Areas } = require('./areas.model');
+const { AssetAttachment } = require('./assetAttachment.model');
 
 // Define associations
 User.belongsTo(Departments, { foreignKey: 'department', targetKey: 'name' });
@@ -56,6 +57,31 @@ User.hasMany(Assets, {
     as: 'CreatedAssets'
 });
 
+// Asset - AssetAttachment associations
+Assets.hasMany(AssetAttachment, {
+    foreignKey: 'asset_id',
+    sourceKey: 'id',
+    as: 'Attachments',
+    onDelete: 'CASCADE'
+});
+AssetAttachment.belongsTo(Assets, {
+    foreignKey: 'asset_id',
+    targetKey: 'id',
+    as: 'Asset'
+});
+
+// AssetAttachment - User association (uploaded_by)
+AssetAttachment.belongsTo(User, {
+    foreignKey: 'uploaded_by',
+    targetKey: 'id',
+    as: 'Uploader'
+});
+User.hasMany(AssetAttachment, {
+    foreignKey: 'uploaded_by',
+    sourceKey: 'id',
+    as: 'UploadedAttachments'
+});
+
 // Plants - Areas associations
 Areas.belongsTo(Plants, {
     foreignKey: 'plant_id',
@@ -68,13 +94,12 @@ Plants.hasMany(Areas, {
     as: 'Areas'
 });
 
-// Bỏ tất cả associations liên quan đến Positions
-
 module.exports = {
     User,
     Departments,
     AssetCategories,
     Assets,
     Plants,
-    Areas
+    Areas,
+    AssetAttachment
 };
