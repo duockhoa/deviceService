@@ -35,7 +35,6 @@ const authMiddleware = async (req, res, next) => {
     const response = await axios.post('/auth/verifytoken', {
       token: token
     });
-    console.log('Auth service response:', response.data);
 
     if (response.data.user) {
       req.user = response.data.user; // Attach user info to the request object
