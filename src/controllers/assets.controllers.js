@@ -1,4 +1,4 @@
-const { Assets, AssetCategories, User, Departments, Areas, Plants } = require('../models');
+const { Assets, AssetCategories, User, Departments, Areas, Plants, AssetGeneralInfo } = require('../models');
 
 // GET /api/assets - Lấy tất cả assets
 const getAllAssets = async (req, res) => {
@@ -38,45 +38,6 @@ const getAllAssets = async (req, res) => {
     }
 };
 
-// GET /api/assets/active - Lấy chỉ assets đang hoạt động
-const getActiveAssets = async (req, res) => {
-    try {
-        const assets = await Assets.findAll({
-            where: { status: 'active' },
-            include: [
-                { model: AssetCategories, as: 'Category' },
-                { model: User, as: 'Creator', attributes: ['id', 'name', 'employee_code'] },
-                { model: Departments, as: 'Department', attributes: ['name', 'description'] },
-                {
-                    model: Areas,
-                    as: 'Area',
-                    attributes: ['id', 'code', 'name', 'description'],
-                    include: [
-                        {
-                            model: Plants,
-                            as: 'Plant',
-                            attributes: ['id', 'code', 'name', 'description']
-                        }
-                    ]
-                }
-            ],
-            order: [['created_at', 'DESC']]
-        });
-
-        res.status(200).json({
-            success: true,
-            data: assets,
-            count: assets.length
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Error fetching active assets',
-            error: error.message
-        });
-    }
-};
-
 // GET /api/assets/:id - Lấy asset theo ID
 const getAssetById = async (req, res) => {
     try {
@@ -109,7 +70,21 @@ const getAssetById = async (req, res) => {
                             attributes: ['id', 'code', 'name', 'description']
                         }
                     ]
+                },
+                {
+                    model: AssetGeneralInfo,
+                    as: 'GeneralInfo',
+                    attributes: [
+                        'manufacture_year',
+                        'manufacturer',
+                        'country_of_origin',
+                        'model',
+                        'serial_number',
+                        'warranty_expiry_date',
+                        'supplier'
+                    ]
                 }
+
             ]
         });
 
@@ -142,9 +117,9 @@ const createAsset = async (req, res) => {
             area_id,
             asset_code,
             name,
-            description,
             image,
-            status, // Thêm status với default value
+            created_by
+            // Bỏ serial_number và notes
         } = req.body;
 
         // Validation
@@ -152,14 +127,6 @@ const createAsset = async (req, res) => {
             return res.status(400).json({
                 success: false,
                 message: 'Category ID, Asset Code, and Name are required'
-            });
-        }
-
-        // Validate status
-        if (status && !['active', 'inactive'].includes(status)) {
-            return res.status(400).json({
-                success: false,
-                message: 'Status must be either "active" or "inactive"'
             });
         }
 
@@ -181,10 +148,8 @@ const createAsset = async (req, res) => {
             area_id,
             asset_code,
             name,
-            description,
             image,
-            status, // Thêm status
-            created_by: req.user?.id
+            created_by
         };
 
         const newAsset = await Assets.create(assetData);
@@ -212,7 +177,7 @@ const createAsset = async (req, res) => {
         if (error.name === 'SequelizeUniqueConstraintError') {
             return res.status(409).json({
                 success: false,
-                message: 'Asset code already exists'
+                message: 'Asset code already exists'  // Bỏ "or serial number"
             });
         }
 
@@ -234,14 +199,6 @@ const updateAsset = async (req, res) => {
             return res.status(404).json({
                 success: false,
                 message: 'Asset not found'
-            });
-        }
-
-        // Validate status nếu có trong request
-        if (req.body.status && !['active', 'inactive'].includes(req.body.status)) {
-            return res.status(400).json({
-                success: false,
-                message: 'Status must be either "active" or "inactive"'
             });
         }
 
@@ -284,7 +241,7 @@ const updateAsset = async (req, res) => {
         if (error.name === 'SequelizeUniqueConstraintError') {
             return res.status(409).json({
                 success: false,
-                message: 'Asset code already exists'
+                message: 'Asset code already exists'  // Bỏ "or serial number"
             });
         }
 
@@ -296,51 +253,10 @@ const updateAsset = async (req, res) => {
     }
 };
 
-// PUT /api/assets/:id/status - Cập nhật chỉ status của asset
-const updateAssetStatus = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { status } = req.body;
-
-        // Validate status
-        if (!status || !['active', 'inactive'].includes(status)) {
-            return res.status(400).json({
-                success: false,
-                message: 'Valid status is required (active or inactive)'
-            });
-        }
-
-        const asset = await Assets.findByPk(id);
-
-        if (!asset) {
-            return res.status(404).json({
-                success: false,
-                message: 'Asset not found'
-            });
-        }
-
-        await asset.update({ status });
-
-        res.status(200).json({
-            success: true,
-            message: `Asset status updated to ${status} successfully`,
-            data: { id: asset.id, status: asset.status }
-        });
-    } catch (error) {
-        res.status(400).json({
-            success: false,
-            message: 'Error updating asset status',
-            error: error.message
-        });
-    }
-};
-
-// DELETE /api/assets/:id - Xóa asset (có thể chuyển thành inactive thay vì xóa thật)
+// DELETE /api/assets/:id - Xóa asset
 const deleteAsset = async (req, res) => {
     try {
         const { id } = req.params;
-        const { soft = false } = req.query; // Query param để chọn soft delete hay hard delete
-
         const asset = await Assets.findByPk(id);
 
         if (!asset) {
@@ -350,21 +266,12 @@ const deleteAsset = async (req, res) => {
             });
         }
 
-        if (soft === 'true') {
-            // Soft delete: chuyển status thành inactive
-            await asset.update({ status: 'inactive' });
-            res.status(200).json({
-                success: true,
-                message: 'Asset deactivated successfully'
-            });
-        } else {
-            // Hard delete: xóa thật khỏi database
-            await asset.destroy();
-            res.status(200).json({
-                success: true,
-                message: 'Asset deleted successfully'
-            });
-        }
+        await asset.destroy();
+
+        res.status(200).json({
+            success: true,
+            message: 'Asset deleted successfully'
+        });
     } catch (error) {
         res.status(500).json({
             success: false,
@@ -374,19 +281,13 @@ const deleteAsset = async (req, res) => {
     }
 };
 
-// GET /api/assets/by-area/:areaId - Lấy assets theo area
+// GET /api/assets/by-area/:areaId - Lấy assets theo area (thay đổi từ position)
 const getAssetsByArea = async (req, res) => {
     try {
         const { areaId } = req.params;
-        const { status } = req.query; // Optional filter by status
-
-        let whereCondition = { area_id: areaId };
-        if (status && ['active', 'inactive'].includes(status)) {
-            whereCondition.status = status;
-        }
 
         const assets = await Assets.findAll({
-            where: whereCondition,
+            where: { area_id: areaId },
             include: [
                 { model: AssetCategories, as: 'Category' },
                 { model: Departments, as: 'Department' },
@@ -416,15 +317,9 @@ const getAssetsByArea = async (req, res) => {
 const getAssetsByCategory = async (req, res) => {
     try {
         const { categoryId } = req.params;
-        const { status } = req.query; // Optional filter by status
-
-        let whereCondition = { category_id: categoryId };
-        if (status && ['active', 'inactive'].includes(status)) {
-            whereCondition.status = status;
-        }
 
         const assets = await Assets.findAll({
-            where: whereCondition,
+            where: { category_id: categoryId },
             include: [
                 { model: AssetCategories, as: 'Category' },
                 { model: Departments, as: 'Department' },
@@ -454,15 +349,9 @@ const getAssetsByCategory = async (req, res) => {
 const getAssetsByDepartment = async (req, res) => {
     try {
         const { departmentName } = req.params;
-        const { status } = req.query; // Optional filter by status
-
-        let whereCondition = { team_id: departmentName };
-        if (status && ['active', 'inactive'].includes(status)) {
-            whereCondition.status = status;
-        }
 
         const assets = await Assets.findAll({
-            where: whereCondition,
+            where: { team_id: departmentName },
             include: [
                 { model: AssetCategories, as: 'Category' },
                 { model: Departments, as: 'Department' },
@@ -491,7 +380,7 @@ const getAssetsByDepartment = async (req, res) => {
 // GET /api/assets/search - Tìm kiếm assets
 const searchAssets = async (req, res) => {
     try {
-        const { query, category_id, team_id, area_id, status } = req.query;
+        const { query, category_id, team_id, area_id } = req.query; // Thay đổi từ position_id sang area_id
 
         let whereCondition = {};
 
@@ -501,7 +390,7 @@ const searchAssets = async (req, res) => {
                 [require('sequelize').Op.or]: [
                     { name: { [require('sequelize').Op.like]: `%${query}%` } },
                     { asset_code: { [require('sequelize').Op.like]: `%${query}%` } },
-                    { description: { [require('sequelize').Op.like]: `%${query}%` } }
+                    { serial_number: { [require('sequelize').Op.like]: `%${query}%` } }
                 ]
             };
         }
@@ -509,8 +398,7 @@ const searchAssets = async (req, res) => {
         // Thêm điều kiện filter
         if (category_id) whereCondition.category_id = category_id;
         if (team_id) whereCondition.team_id = team_id;
-        if (area_id) whereCondition.area_id = area_id;
-        if (status && ['active', 'inactive'].includes(status)) whereCondition.status = status; // Thêm filter theo status
+        if (area_id) whereCondition.area_id = area_id; // Thay đổi từ position_id sang area_id
 
         const assets = await Assets.findAll({
             where: whereCondition,
@@ -582,13 +470,11 @@ const getAssetByCode = async (req, res) => {
 // Cập nhật exports
 module.exports = {
     getAllAssets,
-    getActiveAssets,      // Mới thêm
     getAssetById,
     createAsset,
     updateAsset,
-    updateAssetStatus,    // Mới thêm
     deleteAsset,
-    getAssetsByArea,
+    getAssetsByArea,      // Thay đổi từ getAssetsByPosition
     getAssetsByCategory,
     getAssetsByDepartment,
     searchAssets,

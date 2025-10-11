@@ -5,6 +5,8 @@ const { Assets } = require('./assets.model');
 const { Plants } = require('./plants.model');
 const { Areas } = require('./areas.model');
 const { AssetAttachment } = require('./assetAttachment.model');
+const { AssetGeneralInfo } = require('./assetGeneralInfo.model');
+const { AssetComponent } = require('./assetComponent.model'); // Thêm import
 
 // Define associations
 User.belongsTo(Departments, { foreignKey: 'department', targetKey: 'name' });
@@ -34,7 +36,7 @@ Departments.hasMany(Assets, {
     as: 'DepartmentAssets'
 });
 
-// Asset - Area association (thay đổi từ Position sang Area)
+// Asset - Area association
 Assets.belongsTo(Areas, {
     foreignKey: 'area_id',
     targetKey: 'id',
@@ -55,6 +57,32 @@ User.hasMany(Assets, {
     foreignKey: 'created_by',
     sourceKey: 'id',
     as: 'CreatedAssets'
+});
+
+// Asset - AssetGeneralInfo associations (One-to-One relationship)
+Assets.hasOne(AssetGeneralInfo, {
+    foreignKey: 'asset_id',
+    sourceKey: 'id',
+    as: 'GeneralInfo',
+    onDelete: 'CASCADE'
+});
+AssetGeneralInfo.belongsTo(Assets, {
+    foreignKey: 'asset_id',
+    targetKey: 'id',
+    as: 'Asset'
+});
+
+// Asset - AssetComponent associations (One-to-Many relationship)
+Assets.hasMany(AssetComponent, {
+    foreignKey: 'asset_id',
+    sourceKey: 'id',
+    as: 'Components',
+    onDelete: 'CASCADE'
+});
+AssetComponent.belongsTo(Assets, {
+    foreignKey: 'asset_id',
+    targetKey: 'id',
+    as: 'Asset'
 });
 
 // Asset - AssetAttachment associations
@@ -101,5 +129,7 @@ module.exports = {
     Assets,
     Plants,
     Areas,
-    AssetAttachment
+    AssetAttachment,
+    AssetGeneralInfo,
+    AssetComponent // Thêm export
 };
