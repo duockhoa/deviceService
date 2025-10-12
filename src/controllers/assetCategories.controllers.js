@@ -1,9 +1,17 @@
-const { AssetCategories, Assets } = require('../models');
+const { AssetCategories, AssetSubCategories, Assets } = require('../models');
 
 // GET /api/asset-categories - Lấy tất cả asset categories
 const getAllAssetCategories = async (req, res) => {
     try {
         const categories = await AssetCategories.findAll({
+            include: [
+                {
+                    model: AssetSubCategories,
+                    as: 'SubCategories',
+                    attributes: ['id', 'code', 'name'],
+                    required: false
+                }
+            ],
             order: [['name', 'ASC']]
         });
 
@@ -28,9 +36,9 @@ const getAssetCategoryById = async (req, res) => {
         const category = await AssetCategories.findByPk(id, {
             include: [
                 {
-                    model: Assets,
-                    as: 'Assets',
-                    attributes: ['id', 'name', 'asset_code', 'description']
+                    model: AssetSubCategories,
+                    as: 'SubCategories',
+                    attributes: ['id', 'code', 'name', 'description']
                 }
             ]
         });
@@ -80,7 +88,44 @@ const createAssetCategory = async (req, res) => {
             });
         }
 
+        // Tự động tạo mã code từ tên
+        const generateCategoryCode = (name) => {
+            // Tách từ và lấy chữ cái đầu
+            const words = name.trim().split(/\s+/);
+            let code = '';
+            
+            for (const word of words) {
+                // Lấy chữ cái đầu của mỗi từ
+                const firstChar = word.charAt(0).toUpperCase();
+                if (/[A-Z]/.test(firstChar)) {
+                    code += firstChar;
+                }
+            }
+            
+            // Nếu không tạo được code hoặc quá ngắn, dùng fallback
+            if (code.length < 2) {
+                code = name.substring(0, 4).toUpperCase().replace(/[^A-Z]/g, '');
+            }
+            
+            return code;
+        };
+
+        const code = generateCategoryCode(name);
+
+        // Kiểm tra trùng code
+        const existingCode = await AssetCategories.findOne({
+            where: { code }
+        });
+
+        if (existingCode) {
+            return res.status(409).json({
+                success: false,
+                message: 'Generated category code already exists. Please use a different name.'
+            });
+        }
+
         const newCategory = await AssetCategories.create({
+            code,
             name,
             description
         });
@@ -94,7 +139,7 @@ const createAssetCategory = async (req, res) => {
         if (error.name === 'SequelizeUniqueConstraintError') {
             return res.status(409).json({
                 success: false,
-                message: 'Category name already exists'
+                message: 'Category name or code already exists'
             });
         }
 
@@ -167,7 +212,15 @@ const deleteAssetCategory = async (req, res) => {
         const { id } = req.params;
 
         const category = await AssetCategories.findByPk(id, {
-            include: [{ model: Assets, as: 'Assets' }]
+            include: [
+                { 
+                    model: AssetSubCategories, 
+                    as: 'SubCategories',
+                    include: [
+                        { model: Assets, as: 'Assets' }
+                    ]
+                }
+            ]
         });
 
         if (!category) {
@@ -177,11 +230,18 @@ const deleteAssetCategory = async (req, res) => {
             });
         }
 
-        // Kiểm tra xem có asset nào đang sử dụng category này không
-        if (category.Assets && category.Assets.length > 0) {
+        // Đếm tổng số assets thuộc category này (thông qua sub categories)
+        let totalAssets = 0;
+        if (category.SubCategories) {
+            totalAssets = category.SubCategories.reduce((sum, subCategory) => {
+                return sum + (subCategory.Assets ? subCategory.Assets.length : 0);
+            }, 0);
+        }
+
+        if (totalAssets > 0) {
             return res.status(409).json({
                 success: false,
-                message: `Cannot delete category. It has ${category.Assets.length} asset(s) assigned to it.`
+                message: `Cannot delete category. It has ${totalAssets} asset(s) in its sub-categories.`
             });
         }
 
@@ -200,8 +260,8 @@ const deleteAssetCategory = async (req, res) => {
     }
 };
 
-// GET /api/asset-categories/:id/assets - Lấy tất cả assets thuộc category
-const getAssetsByCategory = async (req, res) => {
+// GET /api/asset-categories/:id/sub-categories - Lấy tất cả sub categories thuộc category
+const getSubCategoriesByCategory = async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -213,15 +273,8 @@ const getAssetsByCategory = async (req, res) => {
             });
         }
 
-        const assets = await Assets.findAll({
+        const subCategories = await AssetSubCategories.findAll({
             where: { category_id: id },
-            include: [
-                {
-                    model: AssetCategories,
-                    as: 'Category',
-                    attributes: ['id', 'name']
-                }
-            ],
             order: [['name', 'ASC']]
         });
 
@@ -229,14 +282,14 @@ const getAssetsByCategory = async (req, res) => {
             success: true,
             data: {
                 category: category,
-                assets: assets,
-                count: assets.length
+                subCategories: subCategories,
+                count: subCategories.length
             }
         });
     } catch (error) {
         res.status(500).json({
             success: false,
-            message: 'Error fetching assets by category',
+            message: 'Error fetching sub categories by category',
             error: error.message
         });
     }
@@ -248,5 +301,5 @@ module.exports = {
     createAssetCategory,
     updateAssetCategory,
     deleteAssetCategory,
-    getAssetsByCategory
+    getSubCategoriesByCategory
 };

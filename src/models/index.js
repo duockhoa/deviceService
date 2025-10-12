@@ -6,23 +6,24 @@ const { Plants } = require('./plants.model');
 const { Areas } = require('./areas.model');
 const { AssetAttachment } = require('./assetAttachment.model');
 const { AssetGeneralInfo } = require('./assetGeneralInfo.model');
-const { AssetComponent } = require('./assetComponent.model'); // Thêm import
+const { AssetComponent } = require('./assetComponent.model');
+const { AssetSubCategories } = require('./assetSubCategories.model');
 
 // Define associations
 User.belongsTo(Departments, { foreignKey: 'department', targetKey: 'name' });
 Departments.hasMany(User, { foreignKey: 'department', sourceKey: 'name' });
 
-// Asset associations
-Assets.belongsTo(AssetCategories, {
-    foreignKey: 'category_id',
-    targetKey: 'id',
-    as: 'Category'
-});
-AssetCategories.hasMany(Assets, {
-    foreignKey: 'category_id',
-    sourceKey: 'id',
-    as: 'Assets'
-});
+// Bỏ quan hệ trực tiếp Assets - AssetCategories
+// Assets.belongsTo(AssetCategories, {
+//     foreignKey: 'category_id',
+//     targetKey: 'id',
+//     as: 'Category'
+// });
+// AssetCategories.hasMany(Assets, {
+//     foreignKey: 'category_id',
+//     sourceKey: 'id',
+//     as: 'Assets'
+// });
 
 // Asset - Team association
 Assets.belongsTo(Departments, {
@@ -122,6 +123,31 @@ Plants.hasMany(Areas, {
     as: 'Areas'
 });
 
+// Asset Categories - Sub Categories relationships
+AssetCategories.hasMany(AssetSubCategories, {
+    foreignKey: 'category_id',
+    sourceKey: 'id',
+    as: 'SubCategories',
+    onDelete: 'CASCADE'
+});
+AssetSubCategories.belongsTo(AssetCategories, {
+    foreignKey: 'category_id',
+    targetKey: 'id',
+    as: 'Category'
+});
+
+// Assets - Sub Categories relationships (quan hệ chính)
+Assets.belongsTo(AssetSubCategories, {
+    foreignKey: 'sub_category_id',
+    targetKey: 'id',
+    as: 'SubCategory'
+});
+AssetSubCategories.hasMany(Assets, {
+    foreignKey: 'sub_category_id',
+    sourceKey: 'id',
+    as: 'Assets'
+});
+
 module.exports = {
     User,
     Departments,
@@ -131,5 +157,6 @@ module.exports = {
     Areas,
     AssetAttachment,
     AssetGeneralInfo,
-    AssetComponent // Thêm export
+    AssetComponent,
+    AssetSubCategories
 };

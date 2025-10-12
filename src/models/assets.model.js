@@ -8,13 +8,14 @@ const Assets = sequelize.define('assets', {
         autoIncrement: true,
         allowNull: false
     },
-    category_id: {
+    sub_category_id: {
         type: DataTypes.INTEGER,
-        allowNull: false,
+        allowNull: false, // Bắt buộc vì đây là quan hệ chính
         references: {
-            model: 'asset_categories',
+            model: 'asset_sub_categories',
             key: 'id'
-        }
+        },
+        comment: 'Loại thiết bị phụ thuộc'
     },
     team_id: {
         type: DataTypes.STRING(255),
@@ -24,7 +25,7 @@ const Assets = sequelize.define('assets', {
             key: 'name'
         }
     },
-    area_id: {  // Thay đổi từ position_id sang area_id
+    area_id: {
         type: DataTypes.INTEGER,
         allowNull: true,
         references: {
@@ -81,8 +82,12 @@ const Assets = sequelize.define('assets', {
             unique: true,
             fields: ['asset_code']
         },
+        // Bỏ index cho category_id
+        // {
+        //     fields: ['category_id']
+        // },
         {
-            fields: ['category_id']
+            fields: ['sub_category_id']
         },
         {
             fields: ['team_id']

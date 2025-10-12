@@ -6,8 +6,9 @@ const {
     createAsset,
     deleteAsset,
     updateAsset,
-    getAssetsByArea,        // Thay đổi từ getAssetsByPosition
-    getAssetsByCategory,
+    getAssetsByArea,
+    getAssetsBySubCategory,     // Thêm mới
+    getAssetsByCategory,        // Cập nhật logic (thông qua sub categories)
     getAssetsByDepartment,
     searchAssets,
     getAssetByCode
@@ -17,8 +18,9 @@ const {
 router.get('/', getAllAssets);
 router.get('/search', searchAssets); // Đặt trước /:id để tránh conflict
 router.get('/by-code/:assetCode', getAssetByCode);
-router.get('/by-area/:areaId', getAssetsByArea);              // Thay đổi từ by-position
-router.get('/by-category/:categoryId', getAssetsByCategory);
+router.get('/by-area/:areaId', getAssetsByArea);
+router.get('/by-sub-category/:subCategoryId', getAssetsBySubCategory);  // Route mới
+router.get('/by-category/:categoryId', getAssetsByCategory);             // Logic mới
 router.get('/by-department/:departmentName', getAssetsByDepartment);
 router.get('/:id', getAssetById);
 router.post('/', createAsset);

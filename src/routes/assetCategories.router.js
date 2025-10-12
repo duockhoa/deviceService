@@ -1,13 +1,21 @@
 const express = require('express');
 const router = express.Router();
-const {getAllAssetCategories , getAssetCategoryById , getAssetsByCategory , createAssetCategory , deleteAssetCategory , updateAssetCategory} = require("../controllers/assetCategories.controllers");
+const {
+    getAllAssetCategories,
+    getAssetCategoryById,
+    createAssetCategory,
+    updateAssetCategory,
+    deleteAssetCategory,
+    getSubCategoriesByCategory  // Thêm mới thay vì getAssetsByCategory
+} = require("../controllers/assetCategories.controllers");
 
+// CRUD routes
 router.get('/', getAllAssetCategories);
 router.get('/:id', getAssetCategoryById);
-router.get('/:id/assets', getAssetsByCategory);
+router.get('/:id/sub-categories', getSubCategoriesByCategory);  // Thay đổi từ /assets
 router.post('/', createAssetCategory);
-router.delete('/:id', deleteAssetCategory);
 router.put('/:id', updateAssetCategory);
+router.delete('/:id', deleteAssetCategory);
 
 module.exports = router;
 

@@ -76,13 +76,13 @@ const getAreaById = async (req, res) => {
 // POST /api/areas - Tạo area mới
 const createArea = async (req, res) => {
     try {
-        const { code, name, plant_id, description } = req.body;
+        const { name, plant_id, description } = req.body;
 
         // Validation
-        if (!code || !name || !plant_id) {
+        if (!name || !plant_id) {
             return res.status(400).json({
                 success: false,
-                message: 'Code, name, and plant_id are required'
+                message: 'Name and plant_id are required'
             });
         }
 
@@ -95,17 +95,37 @@ const createArea = async (req, res) => {
             });
         }
 
-        // Kiểm tra trùng code
-        const existingArea = await Areas.findOne({
-            where: { code }
-        });
-
-        if (existingArea) {
-            return res.status(409).json({
-                success: false,
-                message: 'Area code already exists'
+        // Tự động tạo mã code AREA + số thứ tự
+        const generateAreaCode = async () => {
+            // Lấy tất cả areas có code format AREAXX
+            const existingAreas = await Areas.findAll({
+                attributes: ['code'],
+                where: {
+                    code: {
+                        [require('sequelize').Op.like]: 'AREA%'
+                    }
+                },
+                order: [['code', 'DESC']]
             });
-        }
+
+            if (existingAreas.length === 0) {
+                return 'AREA001';
+            }
+
+            // Lấy số thứ tự cao nhất
+            const numbers = existingAreas
+                .map(area => {
+                    const match = area.code.match(/AREA(\d+)/);
+                    return match ? parseInt(match[1]) : 0;
+                })
+                .filter(num => !isNaN(num))
+                .sort((a, b) => b - a);
+
+            const nextNumber = numbers.length > 0 ? numbers[0] + 1 : 1;
+            return `AREA${String(nextNumber).padStart(3, '0')}`;
+        };
+
+        const code = await generateAreaCode();
 
         const newArea = await Areas.create({
             code,

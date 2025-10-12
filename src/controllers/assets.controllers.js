@@ -1,11 +1,18 @@
-const { Assets, AssetCategories, User, Departments, Areas, Plants, AssetGeneralInfo } = require('../models');
+const { Assets, AssetCategories, AssetSubCategories, User, Departments, Areas, Plants, AssetGeneralInfo } = require('../models');
 
 // GET /api/assets - Lấy tất cả assets
 const getAllAssets = async (req, res) => {
     try {
         const assets = await Assets.findAll({
             include: [
-                { model: AssetCategories, as: 'Category' },
+                { 
+                    model: AssetSubCategories, 
+                    as: 'SubCategory',
+                    include: [{
+                        model: AssetCategories,
+                        as: 'Category'
+                    }]
+                },
                 { model: User, as: 'Creator', attributes: ['id', 'name', 'employee_code'] },
                 { model: Departments, as: 'Department', attributes: ['name', 'description'] },
                 {
@@ -45,9 +52,13 @@ const getAssetById = async (req, res) => {
         const asset = await Assets.findByPk(id, {
             include: [
                 {
-                    model: AssetCategories,
-                    as: 'Category',
-                    attributes: ['id', 'name', 'description']
+                    model: AssetSubCategories,
+                    as: 'SubCategory',
+                    include: [{
+                        model: AssetCategories,
+                        as: 'Category',
+                        attributes: ['id', 'code', 'name', 'description']
+                    }]
                 },
                 {
                     model: User,
@@ -84,7 +95,6 @@ const getAssetById = async (req, res) => {
                         'supplier'
                     ]
                 }
-
             ]
         });
 
@@ -112,20 +122,29 @@ const getAssetById = async (req, res) => {
 const createAsset = async (req, res) => {
     try {
         const {
-            category_id,
+            sub_category_id,
             team_id,
             area_id,
             asset_code,
             name,
             image,
-            // Bỏ serial_number và notes
+            status,
         } = req.body;
 
         // Validation
-        if (!category_id || !asset_code || !name) {
+        if (!sub_category_id || !asset_code || !name) {
             return res.status(400).json({
                 success: false,
-                message: 'Category ID, Asset Code, and Name are required'
+                message: 'Sub Category ID, Asset Code, and Name are required'
+            });
+        }
+
+        // Kiểm tra sub_category có tồn tại không
+        const subCategory = await AssetSubCategories.findByPk(sub_category_id);
+        if (!subCategory) {
+            return res.status(400).json({
+                success: false,
+                message: 'Sub category not found'
             });
         }
 
@@ -142,11 +161,12 @@ const createAsset = async (req, res) => {
         }
 
         const assetData = {
-            category_id,
+            sub_category_id,
             team_id,
             area_id,
             asset_code,
             name,
+            status: status || 'active',
             image,
             created_by: req.user.id
         };
@@ -156,7 +176,14 @@ const createAsset = async (req, res) => {
         // Lấy asset mới tạo với đầy đủ thông tin
         const assetWithDetails = await Assets.findByPk(newAsset.id, {
             include: [
-                { model: AssetCategories, as: 'Category' },
+                { 
+                    model: AssetSubCategories, 
+                    as: 'SubCategory',
+                    include: [{
+                        model: AssetCategories,
+                        as: 'Category'
+                    }]
+                },
                 { model: User, as: 'Creator', attributes: ['id', 'name', 'employee_code'] },
                 { model: Departments, as: 'Department' },
                 {
@@ -176,7 +203,7 @@ const createAsset = async (req, res) => {
         if (error.name === 'SequelizeUniqueConstraintError') {
             return res.status(409).json({
                 success: false,
-                message: 'Asset code already exists'  // Bỏ "or serial number"
+                message: 'Asset code already exists'
             });
         }
 
@@ -201,6 +228,17 @@ const updateAsset = async (req, res) => {
             });
         }
 
+        // Kiểm tra sub_category có tồn tại không (nếu có thay đổi)
+        if (req.body.sub_category_id && req.body.sub_category_id !== asset.sub_category_id) {
+            const subCategory = await AssetSubCategories.findByPk(req.body.sub_category_id);
+            if (!subCategory) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Sub category not found'
+                });
+            }
+        }
+
         // Kiểm tra asset_code trùng (nếu có thay đổi)
         if (req.body.asset_code && req.body.asset_code !== asset.asset_code) {
             const existingAsset = await Assets.findOne({
@@ -220,7 +258,14 @@ const updateAsset = async (req, res) => {
         // Lấy asset đã cập nhật với đầy đủ thông tin
         const updatedAsset = await Assets.findByPk(id, {
             include: [
-                { model: AssetCategories, as: 'Category' },
+                { 
+                    model: AssetSubCategories, 
+                    as: 'SubCategory',
+                    include: [{
+                        model: AssetCategories,
+                        as: 'Category'
+                    }]
+                },
                 { model: User, as: 'Creator', attributes: ['id', 'name', 'employee_code'] },
                 { model: Departments, as: 'Department' },
                 {
@@ -240,7 +285,7 @@ const updateAsset = async (req, res) => {
         if (error.name === 'SequelizeUniqueConstraintError') {
             return res.status(409).json({
                 success: false,
-                message: 'Asset code already exists'  // Bỏ "or serial number"
+                message: 'Asset code already exists'
             });
         }
 
@@ -280,7 +325,7 @@ const deleteAsset = async (req, res) => {
     }
 };
 
-// GET /api/assets/by-area/:areaId - Lấy assets theo area (thay đổi từ position)
+// GET /api/assets/by-area/:areaId - Lấy assets theo area
 const getAssetsByArea = async (req, res) => {
     try {
         const { areaId } = req.params;
@@ -288,7 +333,14 @@ const getAssetsByArea = async (req, res) => {
         const assets = await Assets.findAll({
             where: { area_id: areaId },
             include: [
-                { model: AssetCategories, as: 'Category' },
+                { 
+                    model: AssetSubCategories, 
+                    as: 'SubCategory',
+                    include: [{
+                        model: AssetCategories,
+                        as: 'Category'
+                    }]
+                },
                 { model: Departments, as: 'Department' },
                 {
                     model: Areas,
@@ -312,15 +364,73 @@ const getAssetsByArea = async (req, res) => {
     }
 };
 
-// GET /api/assets/by-category/:categoryId - Lấy assets theo category
+// GET /api/assets/by-sub-category/:subCategoryId - Lấy assets theo sub category
+const getAssetsBySubCategory = async (req, res) => {
+    try {
+        const { subCategoryId } = req.params;
+
+        const assets = await Assets.findAll({
+            where: { sub_category_id: subCategoryId },
+            include: [
+                { 
+                    model: AssetSubCategories, 
+                    as: 'SubCategory',
+                    include: [{
+                        model: AssetCategories,
+                        as: 'Category'
+                    }]
+                },
+                { model: Departments, as: 'Department' },
+                {
+                    model: Areas,
+                    as: 'Area',
+                    include: [{ model: Plants, as: 'Plant' }]
+                }
+            ]
+        });
+
+        res.status(200).json({
+            success: true,
+            data: assets,
+            count: assets.length
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching assets by sub category',
+            error: error.message
+        });
+    }
+};
+
+// GET /api/assets/by-category/:categoryId - Lấy assets theo category (thông qua sub categories)
 const getAssetsByCategory = async (req, res) => {
     try {
         const { categoryId } = req.params;
 
-        const assets = await Assets.findAll({
+        // Lấy tất cả sub categories thuộc category này
+        const subCategories = await AssetSubCategories.findAll({
             where: { category_id: categoryId },
+            attributes: ['id']
+        });
+
+        const subCategoryIds = subCategories.map(sc => sc.id);
+
+        const assets = await Assets.findAll({
+            where: { 
+                sub_category_id: {
+                    [require('sequelize').Op.in]: subCategoryIds
+                }
+            },
             include: [
-                { model: AssetCategories, as: 'Category' },
+                { 
+                    model: AssetSubCategories, 
+                    as: 'SubCategory',
+                    include: [{
+                        model: AssetCategories,
+                        as: 'Category'
+                    }]
+                },
                 { model: Departments, as: 'Department' },
                 {
                     model: Areas,
@@ -352,7 +462,14 @@ const getAssetsByDepartment = async (req, res) => {
         const assets = await Assets.findAll({
             where: { team_id: departmentName },
             include: [
-                { model: AssetCategories, as: 'Category' },
+                { 
+                    model: AssetSubCategories, 
+                    as: 'SubCategory',
+                    include: [{
+                        model: AssetCategories,
+                        as: 'Category'
+                    }]
+                },
                 { model: Departments, as: 'Department' },
                 {
                     model: Areas,
@@ -379,7 +496,7 @@ const getAssetsByDepartment = async (req, res) => {
 // GET /api/assets/search - Tìm kiếm assets
 const searchAssets = async (req, res) => {
     try {
-        const { query, category_id, team_id, area_id } = req.query; // Thay đổi từ position_id sang area_id
+        const { query, category_id, sub_category_id, team_id, area_id } = req.query;
 
         let whereCondition = {};
 
@@ -389,20 +506,40 @@ const searchAssets = async (req, res) => {
                 [require('sequelize').Op.or]: [
                     { name: { [require('sequelize').Op.like]: `%${query}%` } },
                     { asset_code: { [require('sequelize').Op.like]: `%${query}%` } },
-                    { serial_number: { [require('sequelize').Op.like]: `%${query}%` } }
+                    { description: { [require('sequelize').Op.like]: `%${query}%` } }
                 ]
             };
         }
 
         // Thêm điều kiện filter
-        if (category_id) whereCondition.category_id = category_id;
+        if (sub_category_id) {
+            whereCondition.sub_category_id = sub_category_id;
+        } else if (category_id) {
+            // Nếu filter theo category, lấy tất cả sub categories thuộc category đó
+            const subCategories = await AssetSubCategories.findAll({
+                where: { category_id: category_id },
+                attributes: ['id']
+            });
+            const subCategoryIds = subCategories.map(sc => sc.id);
+            whereCondition.sub_category_id = {
+                [require('sequelize').Op.in]: subCategoryIds
+            };
+        }
+
         if (team_id) whereCondition.team_id = team_id;
-        if (area_id) whereCondition.area_id = area_id; // Thay đổi từ position_id sang area_id
+        if (area_id) whereCondition.area_id = area_id;
 
         const assets = await Assets.findAll({
             where: whereCondition,
             include: [
-                { model: AssetCategories, as: 'Category' },
+                { 
+                    model: AssetSubCategories, 
+                    as: 'SubCategory',
+                    include: [{
+                        model: AssetCategories,
+                        as: 'Category'
+                    }]
+                },
                 { model: Departments, as: 'Department' },
                 {
                     model: Areas,
@@ -435,7 +572,14 @@ const getAssetByCode = async (req, res) => {
         const asset = await Assets.findOne({
             where: { asset_code: assetCode },
             include: [
-                { model: AssetCategories, as: 'Category' },
+                { 
+                    model: AssetSubCategories, 
+                    as: 'SubCategory',
+                    include: [{
+                        model: AssetCategories,
+                        as: 'Category'
+                    }]
+                },
                 { model: User, as: 'Creator', attributes: ['id', 'name', 'employee_code'] },
                 { model: Departments, as: 'Department' },
                 {
@@ -466,15 +610,15 @@ const getAssetByCode = async (req, res) => {
     }
 };
 
-// Cập nhật exports
 module.exports = {
     getAllAssets,
     getAssetById,
     createAsset,
     updateAsset,
     deleteAsset,
-    getAssetsByArea,      // Thay đổi từ getAssetsByPosition
-    getAssetsByCategory,
+    getAssetsByArea,
+    getAssetsBySubCategory,  // Thêm mới
+    getAssetsByCategory,     // Cập nhật logic
     getAssetsByDepartment,
     searchAssets,
     getAssetByCode

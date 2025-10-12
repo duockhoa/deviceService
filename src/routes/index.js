@@ -8,12 +8,11 @@ const areasRouter = require('./areas.router');
 const assetsRouter = require('./assets.router');
 const assetCategoriesRouter = require('./assetCategories.router');
 const departmentsRouter = require('./departments.router');
+const assetSubCategoriesRouter = require('./assetSubCategories.router');
 
-// Use department router
-
+// Use asset sub-categories router
+router.use('/asset-sub-categories', assetSubCategoriesRouter);
 router.use('/departments', departmentsRouter);
-
-// Use routers
 router.use('/plants', plantsRouter);
 router.use('/areas', areasRouter);
 router.use('/asset-categories', assetCategoriesRouter);
