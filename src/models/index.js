@@ -8,6 +8,8 @@ const { AssetAttachment } = require('./assetAttachment.model');
 const { AssetGeneralInfo } = require('./assetGeneralInfo.model');
 const { AssetComponent } = require('./assetComponent.model');
 const { AssetSubCategories } = require('./assetSubCategories.model');
+const { SpecificationCategories } = require('./specificationCategories.model');
+const { AssetSpecifications } = require('./assetSpecifications.model');
 
 // Define associations
 User.belongsTo(Departments, { foreignKey: 'department', targetKey: 'name' });
@@ -138,6 +140,104 @@ AssetSubCategories.hasMany(Assets, {
     as: 'Assets'
 });
 
+// ================== NEW ASSOCIATIONS FOR SPECIFICATIONS ==================
+
+// 1. AssetSubCategories - SpecificationCategories (One-to-Many)
+AssetSubCategories.hasMany(SpecificationCategories, {
+    foreignKey: 'sub_category_id',
+    sourceKey: 'id',
+    as: 'SpecificationCategories',
+    onDelete: 'CASCADE'
+});
+SpecificationCategories.belongsTo(AssetSubCategories, {
+    foreignKey: 'sub_category_id',
+    targetKey: 'id',
+    as: 'SubCategory'
+});
+
+// 2. Assets - AssetSpecifications (One-to-Many)
+Assets.hasMany(AssetSpecifications, {
+    foreignKey: 'asset_id',
+    sourceKey: 'id',
+    as: 'Specifications',
+    onDelete: 'CASCADE'
+});
+AssetSpecifications.belongsTo(Assets, {
+    foreignKey: 'asset_id',
+    targetKey: 'id',
+    as: 'Asset'
+});
+
+// 3. SpecificationCategories - AssetSpecifications (One-to-Many)
+SpecificationCategories.hasMany(AssetSpecifications, {
+    foreignKey: 'spec_category_id',
+    sourceKey: 'id',
+    as: 'AssetSpecifications',
+    onDelete: 'CASCADE'
+});
+AssetSpecifications.belongsTo(SpecificationCategories, {
+    foreignKey: 'spec_category_id',
+    targetKey: 'id',
+    as: 'SpecCategory'
+});
+
+// 4. User - SpecificationCategories associations (created_by, updated_by)
+User.hasMany(SpecificationCategories, {
+    foreignKey: 'created_by',
+    sourceKey: 'id',
+    as: 'CreatedSpecCategories'
+});
+SpecificationCategories.belongsTo(User, {
+    foreignKey: 'created_by',
+    targetKey: 'id',
+    as: 'Creator'
+});
+
+User.hasMany(SpecificationCategories, {
+    foreignKey: 'updated_by',
+    sourceKey: 'id',
+    as: 'UpdatedSpecCategories'
+});
+SpecificationCategories.belongsTo(User, {
+    foreignKey: 'updated_by',
+    targetKey: 'id',
+    as: 'Updater'
+});
+
+// 5. User - AssetSpecifications associations (created_by, updated_by, verified_by)
+User.hasMany(AssetSpecifications, {
+    foreignKey: 'created_by',
+    sourceKey: 'id',
+    as: 'CreatedSpecifications'
+});
+AssetSpecifications.belongsTo(User, {
+    foreignKey: 'created_by',
+    targetKey: 'id',
+    as: 'Creator'
+});
+
+User.hasMany(AssetSpecifications, {
+    foreignKey: 'updated_by',
+    sourceKey: 'id',
+    as: 'UpdatedSpecifications'
+});
+AssetSpecifications.belongsTo(User, {
+    foreignKey: 'updated_by',
+    targetKey: 'id',
+    as: 'Updater'
+});
+
+User.hasMany(AssetSpecifications, {
+    foreignKey: 'verified_by',
+    sourceKey: 'id',
+    as: 'VerifiedSpecifications'
+});
+AssetSpecifications.belongsTo(User, {
+    foreignKey: 'verified_by',
+    targetKey: 'id',
+    as: 'Verifier'
+});
+
 module.exports = {
     User,
     Departments,
@@ -148,5 +248,7 @@ module.exports = {
     AssetAttachment,
     AssetGeneralInfo,
     AssetComponent,
-    AssetSubCategories
+    AssetSubCategories,
+    SpecificationCategories,
+    AssetSpecifications
 };
