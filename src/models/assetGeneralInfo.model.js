@@ -19,11 +19,11 @@ const AssetGeneralInfo = sequelize.define('asset_general_info', {
         onUpdate: 'CASCADE'
     },
     manufacture_year: {
-        type: DataTypes.INTEGER, // YEAR trong MySQL sẽ map thành INTEGER
+        type: DataTypes.INTEGER,
         allowNull: true,
         validate: {
             min: 1900,
-            max: new Date().getFullYear() + 10 // Cho phép năm tương lai gần
+            max: new Date().getFullYear() + 10
         },
         comment: 'Năm sản xuất thiết bị'
     },
@@ -47,8 +47,17 @@ const AssetGeneralInfo = sequelize.define('asset_general_info', {
         allowNull: true,
         comment: 'Số serial của thiết bị'
     },
+    warranty_period_months: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        validate: {
+            min: 1,
+            max: 120 // Tối đa 10 năm (120 tháng)
+        },
+        comment: 'Thời gian bảo hành (tính theo tháng)'
+    },
     warranty_expiry_date: {
-        type: DataTypes.DATEONLY, // DATEONLY cho DATE type
+        type: DataTypes.DATEONLY,
         allowNull: true,
         comment: 'Ngày hết hạn bảo hành'
     },
@@ -56,6 +65,11 @@ const AssetGeneralInfo = sequelize.define('asset_general_info', {
         type: DataTypes.STRING(255),
         allowNull: true,
         comment: 'Nhà cung cấp thiết bị'
+    },
+    description: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+        comment: 'Mô tả chi tiết về thông số kỹ thuật, tính năng, đặc điểm của thiết bị'
     },
     created_at: {
         type: DataTypes.DATE,
@@ -69,7 +83,7 @@ const AssetGeneralInfo = sequelize.define('asset_general_info', {
     }
 }, {
     tableName: 'asset_general_info',
-    timestamps: false, // Vì chúng ta tự định nghĩa created_at và updated_at
+    timestamps: false,
     hooks: {
         beforeUpdate: (instance) => {
             instance.updated_at = new Date();
@@ -80,13 +94,16 @@ const AssetGeneralInfo = sequelize.define('asset_general_info', {
             fields: ['asset_id']
         },
         {
-            fields: ['serial_number'] // Index cho serial number để tìm kiếm nhanh
+            fields: ['serial_number']
         },
         {
-            fields: ['manufacturer'] // Index cho manufacturer
+            fields: ['manufacturer']
         },
         {
-            fields: ['warranty_expiry_date'] // Index cho warranty tracking
+            fields: ['warranty_expiry_date']
+        },
+        {
+            fields: ['warranty_period_months']  // Thêm index mới
         }
     ]
 });

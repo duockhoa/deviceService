@@ -1,4 +1,6 @@
-const { Assets, AssetCategories, AssetSubCategories, User, Departments, Areas, Plants, AssetGeneralInfo } = require('../models');
+const { Assets, AssetCategories, AssetSubCategories, User, Departments, Areas, Plants, AssetGeneralInfo , AssetComponent } = require('../models');
+const  sequelize  = require('../configs/sequelize');
+
 
 // GET /api/assets - Lấy tất cả assets
 const getAllAssets = async (req, res) => {
@@ -92,6 +94,7 @@ const getAssetById = async (req, res) => {
                         'model',
                         'serial_number',
                         'warranty_expiry_date',
+                        'warranty_period_months',
                         'supplier'
                     ]
                 }
@@ -118,21 +121,25 @@ const getAssetById = async (req, res) => {
     }
 };
 
-// POST /api/assets - Tạo asset mới
+// POST /api/assets - Tạo asset mới (bao gồm general info)
 const createAsset = async (req, res) => {
+    const t = await sequelize.transaction();
+    
     try {
         const {
+            // Basic asset info
             sub_category_id,
             team_id,
-            area_id,
             asset_code,
             name,
-            image,
             status,
+            // General info object
+            generalInfo
         } = req.body;
 
-        // Validation
+        // Validation cơ bản
         if (!sub_category_id || !asset_code || !name) {
+            await t.rollback();
             return res.status(400).json({
                 success: false,
                 message: 'Sub Category ID, Asset Code, and Name are required'
@@ -142,6 +149,7 @@ const createAsset = async (req, res) => {
         // Kiểm tra sub_category có tồn tại không
         const subCategory = await AssetSubCategories.findByPk(sub_category_id);
         if (!subCategory) {
+            await t.rollback();
             return res.status(400).json({
                 success: false,
                 message: 'Sub category not found'
@@ -154,24 +162,46 @@ const createAsset = async (req, res) => {
         });
 
         if (existingAsset) {
+            await t.rollback();
             return res.status(409).json({
                 success: false,
                 message: 'Asset code already exists'
             });
         }
 
+        // Tạo asset cơ bản
         const assetData = {
             sub_category_id,
             team_id,
-            area_id,
             asset_code,
             name,
             status: status || 'active',
-            image,
             created_by: req.user.id
         };
 
-        const newAsset = await Assets.create(assetData);
+        const newAsset = await Assets.create(assetData, { transaction : t });
+
+
+        // Tạo AssetGeneralInfo - luôn tạo record (có thể để trống)
+        const generalInfoData = {
+            asset_id: newAsset.id,
+            manufacture_year: generalInfo?.manufacture_year || null,
+            manufacturer: generalInfo?.manufacturer || null,
+            country_of_origin: generalInfo?.country_of_origin || null,
+            model: generalInfo?.model || null,
+            serial_number: generalInfo?.serial_number || null,
+            warranty_period_months: generalInfo?.warranty_period_months || null,  // Thêm trường mới
+            warranty_expiry_date: generalInfo?.warranty_expiry_date || null,
+            supplier: generalInfo?.supplier || null,
+            description: generalInfo?.description || null
+        };
+
+        await AssetGeneralInfo.create(generalInfoData, { transaction: t });
+        
+        // Tạo thành phần cấu tạo (nếu có) 
+
+        // Commit transaction
+        await t.commit();
 
         // Lấy asset mới tạo với đầy đủ thông tin
         const assetWithDetails = await Assets.findByPk(newAsset.id, {
@@ -190,16 +220,22 @@ const createAsset = async (req, res) => {
                     model: Areas,
                     as: 'Area',
                     include: [{ model: Plants, as: 'Plant' }]
+                },
+                {
+                    model: AssetGeneralInfo,
+                    as: 'GeneralInfo'
                 }
             ]
         });
 
         res.status(201).json({
             success: true,
-            message: 'Asset created successfully',
+            message: 'Asset and general info created successfully',
             data: assetWithDetails
         });
     } catch (error) {
+        await t.rollback();
+        
         if (error.name === 'SequelizeUniqueConstraintError') {
             return res.status(409).json({
                 success: false,
@@ -275,6 +311,25 @@ const updateAsset = async (req, res) => {
                 }
             ]
         });
+
+        // Cập nhật thông tin chung (general info) nếu có thay đổi
+        const { generalInfo } = req.body;
+        if (generalInfo) {
+            const generalInfoData = {
+                asset_id: id,
+                manufacture_year: generalInfo.manufacture_year || null,
+                manufacturer: generalInfo.manufacturer || null,
+                country_of_origin: generalInfo.country_of_origin || null,
+                model: generalInfo.model || null,
+                serial_number: generalInfo.serial_number || null,
+                warranty_period_months: generalInfo.warranty_period_months || null,  // Thêm trường mới
+                warranty_expiry_date: generalInfo.warranty_expiry_date || null,
+                supplier: generalInfo.supplier || null,
+                description: generalInfo.description || null
+            };
+
+            await AssetGeneralInfo.upsert(generalInfoData, { transaction });
+        }
 
         res.status(200).json({
             success: true,
@@ -617,8 +672,8 @@ module.exports = {
     updateAsset,
     deleteAsset,
     getAssetsByArea,
-    getAssetsBySubCategory,  // Thêm mới
-    getAssetsByCategory,     // Cập nhật logic
+    getAssetsBySubCategory,
+    getAssetsByCategory,
     getAssetsByDepartment,
     searchAssets,
     getAssetByCode

@@ -13,17 +13,7 @@ const { AssetSubCategories } = require('./assetSubCategories.model');
 User.belongsTo(Departments, { foreignKey: 'department', targetKey: 'name' });
 Departments.hasMany(User, { foreignKey: 'department', sourceKey: 'name' });
 
-// Bỏ quan hệ trực tiếp Assets - AssetCategories
-// Assets.belongsTo(AssetCategories, {
-//     foreignKey: 'category_id',
-//     targetKey: 'id',
-//     as: 'Category'
-// });
-// AssetCategories.hasMany(Assets, {
-//     foreignKey: 'category_id',
-//     sourceKey: 'id',
-//     as: 'Assets'
-// });
+
 
 // Asset - Team association
 Assets.belongsTo(Departments, {
