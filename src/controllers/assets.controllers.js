@@ -28,6 +28,12 @@ const getAllAssets = async (req, res) => {
                             attributes: ['id', 'code', 'name', 'description']
                         }
                     ]
+                },
+                // FIX: Include Components với fields đúng model
+                {
+                    model: AssetComponent,
+                    as: 'Components',
+                    attributes: ['id', 'component_name', 'component_code', 'specification', 'quantity', 'unit', 'remarks']
                 }
             ],
             order: [['created_at', 'DESC']]
@@ -98,17 +104,17 @@ const getAssetById = async (req, res) => {
                         'supplier'
                     ]
                 },
-                // ADD: Include Components với đầy đủ thông tin
+                // FIX: Include Components với đầy đủ thông tin theo model
                 {
                     model: AssetComponent,
                     as: 'Components',
                     attributes: [
                         'id', 
-                        'component_name', 
-                        'part_number', 
+                        'component_name',
+                        'component_code',
+                        'specification',
                         'quantity', 
-                        'unit', 
-                        'status', 
+                        'unit',  
                         'remarks',
                         'created_at',
                         'updated_at'
@@ -152,7 +158,7 @@ const createAsset = async (req, res) => {
             status,
             // General info object
             generalInfo,
-            // NEW: Components array
+            // Components array
             components = []
         } = req.body;
 
@@ -201,7 +207,6 @@ const createAsset = async (req, res) => {
 
         const newAsset = await Assets.create(assetData, { transaction : t });
 
-
         // Tạo AssetGeneralInfo - luôn tạo record (có thể để trống)
         const generalInfoData = {
             asset_id: newAsset.id,
@@ -218,21 +223,23 @@ const createAsset = async (req, res) => {
 
         await AssetGeneralInfo.create(generalInfoData, { transaction: t });
         
-        // NEW: Tạo Components (nếu có)
+        // FIX: Tạo Components theo model structure
+        console.log('Components to create:', components);
         if (components && components.length > 0) {
+
             // Filter out empty components
             const validComponents = components.filter(comp => 
                 comp.component_name && comp.component_name.trim() !== ''
             );
-
+            console.log('Valid components:', validComponents);
             if (validComponents.length > 0) {
                 const componentData = validComponents.map(comp => ({
                     asset_id: newAsset.id,
                     component_name: comp.component_name?.trim(),
-                    part_number: comp.part_number?.trim() || null,
+                    component_code: comp.component_code?.trim() || null, // FIX: component_code thay vì part_number
+                    specification: comp.specification?.trim() || null,   // FIX: thêm specification
                     quantity: comp.quantity || 1,
                     unit: comp.unit?.trim() || null,
-                    status: comp.status || 'active',
                     remarks: comp.remarks?.trim() || null
                 }));
 
@@ -265,7 +272,7 @@ const createAsset = async (req, res) => {
                     model: AssetGeneralInfo,
                     as: 'GeneralInfo'
                 },
-                // NEW: Include created components
+                // Include created components
                 {
                     model: AssetComponent,
                     as: 'Components'
@@ -284,7 +291,7 @@ const createAsset = async (req, res) => {
         if (error.name === 'SequelizeUniqueConstraintError') {
             return res.status(409).json({
                 success: false,
-                message: 'Asset code already exists'
+                message: 'Asset code or component code already exists'
             });
         }
 
@@ -362,7 +369,7 @@ const updateAsset = async (req, res) => {
             await AssetGeneralInfo.upsert(generalInfoData, { transaction: t });
         }
 
-        // NEW: Cập nhật Components
+        // FIX: Cập nhật Components theo model structure
         if (components !== undefined) {
             // Xóa tất cả components cũ
             await AssetComponent.destroy({
@@ -381,10 +388,10 @@ const updateAsset = async (req, res) => {
                     const componentData = validComponents.map(comp => ({
                         asset_id: id,
                         component_name: comp.component_name?.trim(),
-                        part_number: comp.part_number?.trim() || null,
+                        component_code: comp.component_code?.trim() || null, // FIX: component_code
+                        specification: comp.specification?.trim() || null,   // FIX: thêm specification
                         quantity: comp.quantity || 1,
                         unit: comp.unit?.trim() || null,
-                        status: comp.status || 'active',
                         remarks: comp.remarks?.trim() || null
                     }));
 
@@ -418,7 +425,7 @@ const updateAsset = async (req, res) => {
                     model: AssetGeneralInfo,
                     as: 'GeneralInfo'
                 },
-                // NEW: Include updated components
+                // Include updated components
                 {
                     model: AssetComponent,
                     as: 'Components'
@@ -437,7 +444,7 @@ const updateAsset = async (req, res) => {
         if (error.name === 'SequelizeUniqueConstraintError') {
             return res.status(409).json({
                 success: false,
-                message: 'Asset code already exists'
+                message: 'Asset code or component code already exists'
             });
         }
 
@@ -465,7 +472,7 @@ const deleteAsset = async (req, res) => {
             });
         }
 
-        // NEW: Xóa components trước (nếu không có foreign key cascade)
+        // Xóa components trước (nếu không có foreign key cascade)
         await AssetComponent.destroy({
             where: { asset_id: id },
             transaction: t
@@ -496,7 +503,7 @@ const deleteAsset = async (req, res) => {
     }
 };
 
-// GET /api/assets/by-area/:areaId - Lấy assets theo area (include components)
+// FIX: Cập nhật tất cả các GET methods khác để include Components với fields đúng
 const getAssetsByArea = async (req, res) => {
     try {
         const { areaId } = req.params;
@@ -518,7 +525,6 @@ const getAssetsByArea = async (req, res) => {
                     as: 'Area',
                     include: [{ model: Plants, as: 'Plant' }]
                 },
-                // NEW: Include components
                 {
                     model: AssetComponent,
                     as: 'Components'
@@ -540,7 +546,6 @@ const getAssetsByArea = async (req, res) => {
     }
 };
 
-// GET /api/assets/by-sub-category/:subCategoryId - Lấy assets theo sub category
 const getAssetsBySubCategory = async (req, res) => {
     try {
         const { subCategoryId } = req.params;
@@ -562,7 +567,6 @@ const getAssetsBySubCategory = async (req, res) => {
                     as: 'Area',
                     include: [{ model: Plants, as: 'Plant' }]
                 },
-                // NEW: Include components
                 {
                     model: AssetComponent,
                     as: 'Components'
@@ -584,12 +588,10 @@ const getAssetsBySubCategory = async (req, res) => {
     }
 };
 
-// GET /api/assets/by-category/:categoryId - Lấy assets theo category (thông qua sub categories)
 const getAssetsByCategory = async (req, res) => {
     try {
         const { categoryId } = req.params;
 
-        // Lấy tất cả sub categories thuộc category này
         const subCategories = await AssetSubCategories.findAll({
             where: { category_id: categoryId },
             attributes: ['id']
@@ -618,7 +620,6 @@ const getAssetsByCategory = async (req, res) => {
                     as: 'Area',
                     include: [{ model: Plants, as: 'Plant' }]
                 },
-                // NEW: Include components
                 {
                     model: AssetComponent,
                     as: 'Components'
@@ -640,7 +641,6 @@ const getAssetsByCategory = async (req, res) => {
     }
 };
 
-// GET /api/assets/by-department/:departmentName - Lấy assets theo department
 const getAssetsByDepartment = async (req, res) => {
     try {
         const { departmentName } = req.params;
@@ -662,7 +662,6 @@ const getAssetsByDepartment = async (req, res) => {
                     as: 'Area',
                     include: [{ model: Plants, as: 'Plant' }]
                 },
-                // NEW: Include components
                 {
                     model: AssetComponent,
                     as: 'Components'
@@ -684,14 +683,12 @@ const getAssetsByDepartment = async (req, res) => {
     }
 };
 
-// GET /api/assets/search - Tìm kiếm assets
 const searchAssets = async (req, res) => {
     try {
         const { query, category_id, sub_category_id, team_id, area_id } = req.query;
 
         let whereCondition = {};
 
-        // Thêm điều kiện tìm kiếm theo text
         if (query) {
             whereCondition = {
                 [require('sequelize').Op.or]: [
@@ -702,11 +699,9 @@ const searchAssets = async (req, res) => {
             };
         }
 
-        // Thêm điều kiện filter
         if (sub_category_id) {
             whereCondition.sub_category_id = sub_category_id;
         } else if (category_id) {
-            // Nếu filter theo category, lấy tất cả sub categories thuộc category đó
             const subCategories = await AssetSubCategories.findAll({
                 where: { category_id: category_id },
                 attributes: ['id']
@@ -737,7 +732,6 @@ const searchAssets = async (req, res) => {
                     as: 'Area',
                     include: [{ model: Plants, as: 'Plant' }]
                 },
-                // NEW: Include components in search
                 {
                     model: AssetComponent,
                     as: 'Components'
@@ -761,7 +755,6 @@ const searchAssets = async (req, res) => {
     }
 };
 
-// GET /api/assets/by-asset-code/:assetCode - Lấy asset theo asset code
 const getAssetByCode = async (req, res) => {
     try {
         const { assetCode } = req.params;
@@ -783,7 +776,6 @@ const getAssetByCode = async (req, res) => {
                     as: 'Area',
                     include: [{ model: Plants, as: 'Plant' }]
                 },
-                // NEW: Include components
                 {
                     model: AssetComponent,
                     as: 'Components'
