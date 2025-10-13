@@ -130,6 +130,7 @@ const createAsset = async (req, res) => {
             // Basic asset info
             sub_category_id,
             team_id,
+            area_id,
             asset_code,
             name,
             status,
@@ -173,6 +174,7 @@ const createAsset = async (req, res) => {
         const assetData = {
             sub_category_id,
             team_id,
+            area_id,
             asset_code,
             name,
             status: status || 'active',
