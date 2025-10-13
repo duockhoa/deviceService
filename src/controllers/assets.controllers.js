@@ -97,6 +97,22 @@ const getAssetById = async (req, res) => {
                         'warranty_period_months',
                         'supplier'
                     ]
+                },
+                // ADD: Include Components với đầy đủ thông tin
+                {
+                    model: AssetComponent,
+                    as: 'Components',
+                    attributes: [
+                        'id', 
+                        'component_name', 
+                        'part_number', 
+                        'quantity', 
+                        'unit', 
+                        'status', 
+                        'remarks',
+                        'created_at',
+                        'updated_at'
+                    ]
                 }
             ]
         });
@@ -121,7 +137,7 @@ const getAssetById = async (req, res) => {
     }
 };
 
-// POST /api/assets - Tạo asset mới (bao gồm general info)
+// POST /api/assets - Tạo asset mới (bao gồm general info và components)
 const createAsset = async (req, res) => {
     const t = await sequelize.transaction();
     
@@ -135,7 +151,9 @@ const createAsset = async (req, res) => {
             name,
             status,
             // General info object
-            generalInfo
+            generalInfo,
+            // NEW: Components array
+            components = []
         } = req.body;
 
         // Validation cơ bản
@@ -192,7 +210,7 @@ const createAsset = async (req, res) => {
             country_of_origin: generalInfo?.country_of_origin || null,
             model: generalInfo?.model || null,
             serial_number: generalInfo?.serial_number || null,
-            warranty_period_months: generalInfo?.warranty_period_months || null,  // Thêm trường mới
+            warranty_period_months: generalInfo?.warranty_period_months || null,
             warranty_expiry_date: generalInfo?.warranty_expiry_date || null,
             supplier: generalInfo?.supplier || null,
             description: generalInfo?.description || null
@@ -200,7 +218,27 @@ const createAsset = async (req, res) => {
 
         await AssetGeneralInfo.create(generalInfoData, { transaction: t });
         
-        // Tạo thành phần cấu tạo (nếu có) 
+        // NEW: Tạo Components (nếu có)
+        if (components && components.length > 0) {
+            // Filter out empty components
+            const validComponents = components.filter(comp => 
+                comp.component_name && comp.component_name.trim() !== ''
+            );
+
+            if (validComponents.length > 0) {
+                const componentData = validComponents.map(comp => ({
+                    asset_id: newAsset.id,
+                    component_name: comp.component_name?.trim(),
+                    part_number: comp.part_number?.trim() || null,
+                    quantity: comp.quantity || 1,
+                    unit: comp.unit?.trim() || null,
+                    status: comp.status || 'active',
+                    remarks: comp.remarks?.trim() || null
+                }));
+
+                await AssetComponent.bulkCreate(componentData, { transaction: t });
+            }
+        }
 
         // Commit transaction
         await t.commit();
@@ -226,13 +264,18 @@ const createAsset = async (req, res) => {
                 {
                     model: AssetGeneralInfo,
                     as: 'GeneralInfo'
+                },
+                // NEW: Include created components
+                {
+                    model: AssetComponent,
+                    as: 'Components'
                 }
             ]
         });
 
         res.status(201).json({
             success: true,
-            message: 'Asset and general info created successfully',
+            message: 'Asset, general info, and components created successfully',
             data: assetWithDetails
         });
     } catch (error) {
@@ -253,13 +296,18 @@ const createAsset = async (req, res) => {
     }
 };
 
-// PUT /api/assets/:id - Cập nhật asset
+// PUT /api/assets/:id - Cập nhật asset (bao gồm components)
 const updateAsset = async (req, res) => {
+    const t = await sequelize.transaction();
+    
     try {
         const { id } = req.params;
+        const { generalInfo, components, ...assetData } = req.body;
+        
         const asset = await Assets.findByPk(id);
 
         if (!asset) {
+            await t.rollback();
             return res.status(404).json({
                 success: false,
                 message: 'Asset not found'
@@ -267,9 +315,10 @@ const updateAsset = async (req, res) => {
         }
 
         // Kiểm tra sub_category có tồn tại không (nếu có thay đổi)
-        if (req.body.sub_category_id && req.body.sub_category_id !== asset.sub_category_id) {
-            const subCategory = await AssetSubCategories.findByPk(req.body.sub_category_id);
+        if (assetData.sub_category_id && assetData.sub_category_id !== asset.sub_category_id) {
+            const subCategory = await AssetSubCategories.findByPk(assetData.sub_category_id);
             if (!subCategory) {
+                await t.rollback();
                 return res.status(400).json({
                     success: false,
                     message: 'Sub category not found'
@@ -278,12 +327,13 @@ const updateAsset = async (req, res) => {
         }
 
         // Kiểm tra asset_code trùng (nếu có thay đổi)
-        if (req.body.asset_code && req.body.asset_code !== asset.asset_code) {
+        if (assetData.asset_code && assetData.asset_code !== asset.asset_code) {
             const existingAsset = await Assets.findOne({
-                where: { asset_code: req.body.asset_code }
+                where: { asset_code: assetData.asset_code }
             });
 
             if (existingAsset) {
+                await t.rollback();
                 return res.status(409).json({
                     success: false,
                     message: 'Asset code already exists'
@@ -291,7 +341,60 @@ const updateAsset = async (req, res) => {
             }
         }
 
-        await asset.update(req.body);
+        // Cập nhật thông tin asset cơ bản
+        await asset.update(assetData, { transaction: t });
+
+        // Cập nhật thông tin chung (general info) nếu có thay đổi
+        if (generalInfo) {
+            const generalInfoData = {
+                asset_id: id,
+                manufacture_year: generalInfo.manufacture_year || null,
+                manufacturer: generalInfo.manufacturer || null,
+                country_of_origin: generalInfo.country_of_origin || null,
+                model: generalInfo.model || null,
+                serial_number: generalInfo.serial_number || null,
+                warranty_period_months: generalInfo.warranty_period_months || null,
+                warranty_expiry_date: generalInfo.warranty_expiry_date || null,
+                supplier: generalInfo.supplier || null,
+                description: generalInfo.description || null
+            };
+
+            await AssetGeneralInfo.upsert(generalInfoData, { transaction: t });
+        }
+
+        // NEW: Cập nhật Components
+        if (components !== undefined) {
+            // Xóa tất cả components cũ
+            await AssetComponent.destroy({
+                where: { asset_id: id },
+                transaction: t
+            });
+
+            // Thêm components mới (nếu có)
+            if (components && components.length > 0) {
+                // Filter out empty components
+                const validComponents = components.filter(comp => 
+                    comp.component_name && comp.component_name.trim() !== ''
+                );
+
+                if (validComponents.length > 0) {
+                    const componentData = validComponents.map(comp => ({
+                        asset_id: id,
+                        component_name: comp.component_name?.trim(),
+                        part_number: comp.part_number?.trim() || null,
+                        quantity: comp.quantity || 1,
+                        unit: comp.unit?.trim() || null,
+                        status: comp.status || 'active',
+                        remarks: comp.remarks?.trim() || null
+                    }));
+
+                    await AssetComponent.bulkCreate(componentData, { transaction: t });
+                }
+            }
+        }
+
+        // Commit transaction
+        await t.commit();
 
         // Lấy asset đã cập nhật với đầy đủ thông tin
         const updatedAsset = await Assets.findByPk(id, {
@@ -310,35 +413,27 @@ const updateAsset = async (req, res) => {
                     model: Areas,
                     as: 'Area',
                     include: [{ model: Plants, as: 'Plant' }]
+                },
+                {
+                    model: AssetGeneralInfo,
+                    as: 'GeneralInfo'
+                },
+                // NEW: Include updated components
+                {
+                    model: AssetComponent,
+                    as: 'Components'
                 }
             ]
         });
 
-        // Cập nhật thông tin chung (general info) nếu có thay đổi
-        const { generalInfo } = req.body;
-        if (generalInfo) {
-            const generalInfoData = {
-                asset_id: id,
-                manufacture_year: generalInfo.manufacture_year || null,
-                manufacturer: generalInfo.manufacturer || null,
-                country_of_origin: generalInfo.country_of_origin || null,
-                model: generalInfo.model || null,
-                serial_number: generalInfo.serial_number || null,
-                warranty_period_months: generalInfo.warranty_period_months || null,  // Thêm trường mới
-                warranty_expiry_date: generalInfo.warranty_expiry_date || null,
-                supplier: generalInfo.supplier || null,
-                description: generalInfo.description || null
-            };
-
-            await AssetGeneralInfo.upsert(generalInfoData, { transaction });
-        }
-
         res.status(200).json({
             success: true,
-            message: 'Asset updated successfully',
+            message: 'Asset, general info, and components updated successfully',
             data: updatedAsset
         });
     } catch (error) {
+        await t.rollback();
+        
         if (error.name === 'SequelizeUniqueConstraintError') {
             return res.status(409).json({
                 success: false,
@@ -354,26 +449,45 @@ const updateAsset = async (req, res) => {
     }
 };
 
-// DELETE /api/assets/:id - Xóa asset
+// DELETE /api/assets/:id - Xóa asset (cascade delete components)
 const deleteAsset = async (req, res) => {
+    const t = await sequelize.transaction();
+    
     try {
         const { id } = req.params;
         const asset = await Assets.findByPk(id);
 
         if (!asset) {
+            await t.rollback();
             return res.status(404).json({
                 success: false,
                 message: 'Asset not found'
             });
         }
 
-        await asset.destroy();
+        // NEW: Xóa components trước (nếu không có foreign key cascade)
+        await AssetComponent.destroy({
+            where: { asset_id: id },
+            transaction: t
+        });
+
+        // Xóa general info (nếu không có foreign key cascade)
+        await AssetGeneralInfo.destroy({
+            where: { asset_id: id },
+            transaction: t
+        });
+
+        // Xóa asset
+        await asset.destroy({ transaction: t });
+
+        await t.commit();
 
         res.status(200).json({
             success: true,
-            message: 'Asset deleted successfully'
+            message: 'Asset and all related data deleted successfully'
         });
     } catch (error) {
+        await t.rollback();
         res.status(500).json({
             success: false,
             message: 'Error deleting asset',
@@ -382,7 +496,7 @@ const deleteAsset = async (req, res) => {
     }
 };
 
-// GET /api/assets/by-area/:areaId - Lấy assets theo area
+// GET /api/assets/by-area/:areaId - Lấy assets theo area (include components)
 const getAssetsByArea = async (req, res) => {
     try {
         const { areaId } = req.params;
@@ -403,6 +517,11 @@ const getAssetsByArea = async (req, res) => {
                     model: Areas,
                     as: 'Area',
                     include: [{ model: Plants, as: 'Plant' }]
+                },
+                // NEW: Include components
+                {
+                    model: AssetComponent,
+                    as: 'Components'
                 }
             ]
         });
@@ -442,6 +561,11 @@ const getAssetsBySubCategory = async (req, res) => {
                     model: Areas,
                     as: 'Area',
                     include: [{ model: Plants, as: 'Plant' }]
+                },
+                // NEW: Include components
+                {
+                    model: AssetComponent,
+                    as: 'Components'
                 }
             ]
         });
@@ -493,6 +617,11 @@ const getAssetsByCategory = async (req, res) => {
                     model: Areas,
                     as: 'Area',
                     include: [{ model: Plants, as: 'Plant' }]
+                },
+                // NEW: Include components
+                {
+                    model: AssetComponent,
+                    as: 'Components'
                 }
             ]
         });
@@ -532,6 +661,11 @@ const getAssetsByDepartment = async (req, res) => {
                     model: Areas,
                     as: 'Area',
                     include: [{ model: Plants, as: 'Plant' }]
+                },
+                // NEW: Include components
+                {
+                    model: AssetComponent,
+                    as: 'Components'
                 }
             ]
         });
@@ -602,6 +736,11 @@ const searchAssets = async (req, res) => {
                     model: Areas,
                     as: 'Area',
                     include: [{ model: Plants, as: 'Plant' }]
+                },
+                // NEW: Include components in search
+                {
+                    model: AssetComponent,
+                    as: 'Components'
                 }
             ],
             order: [['created_at', 'DESC']]
@@ -643,6 +782,11 @@ const getAssetByCode = async (req, res) => {
                     model: Areas,
                     as: 'Area',
                     include: [{ model: Plants, as: 'Plant' }]
+                },
+                // NEW: Include components
+                {
+                    model: AssetComponent,
+                    as: 'Components'
                 }
             ]
         });
