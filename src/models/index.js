@@ -10,7 +10,9 @@ const { AssetComponent } = require('./assetComponent.model');
 const { AssetSubCategories } = require('./assetSubCategories.model');
 const { SpecificationCategories } = require('./specificationCategories.model');
 const { AssetSpecifications } = require('./assetSpecifications.model');
+const { ConsumableCategories } = require('./consumableCategories.model');
 
+// ================== EXISTING ASSOCIATIONS ==================
 // Define associations
 User.belongsTo(Departments, { foreignKey: 'department', targetKey: 'name' });
 Departments.hasMany(User, { foreignKey: 'department', sourceKey: 'name' });
@@ -140,7 +142,7 @@ AssetSubCategories.hasMany(Assets, {
     as: 'Assets'
 });
 
-// ================== NEW ASSOCIATIONS FOR SPECIFICATIONS ==================
+// ================== SPECIFICATIONS ASSOCIATIONS ==================
 
 // 1. AssetSubCategories - SpecificationCategories (One-to-Many)
 AssetSubCategories.hasMany(SpecificationCategories, {
@@ -238,6 +240,31 @@ AssetSpecifications.belongsTo(User, {
     as: 'Verifier'
 });
 
+// ================== CONSUMABLE CATEGORIES ASSOCIATIONS ==================
+
+// 1. User - ConsumableCategories associations (created_by, updated_by)
+User.hasMany(ConsumableCategories, {
+    foreignKey: 'created_by',
+    sourceKey: 'id',
+    as: 'CreatedConsumableCategories'
+});
+ConsumableCategories.belongsTo(User, {
+    foreignKey: 'created_by',
+    targetKey: 'id',
+    as: 'Creator'
+});
+
+User.hasMany(ConsumableCategories, {
+    foreignKey: 'updated_by',
+    sourceKey: 'id',
+    as: 'UpdatedConsumableCategories'
+});
+ConsumableCategories.belongsTo(User, {
+    foreignKey: 'updated_by',
+    targetKey: 'id',
+    as: 'Updater'
+});
+
 module.exports = {
     User,
     Departments,
@@ -250,5 +277,6 @@ module.exports = {
     AssetComponent,
     AssetSubCategories,
     SpecificationCategories,
-    AssetSpecifications
+    AssetSpecifications,
+    ConsumableCategories
 };
