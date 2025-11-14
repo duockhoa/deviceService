@@ -23,6 +23,9 @@ app.use(express.static(path.join(  __dirname, '../','public')))
 // routes
 const router = require('./routes/index.js');
 app.use('/api/v1/', router)
+app.get('/', (req, res) => {
+  res.send('Device Service is running')
+})
 
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`)

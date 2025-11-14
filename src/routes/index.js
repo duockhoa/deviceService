@@ -11,6 +11,8 @@ const departmentsRouter = require('./departments.router');
 const assetSubCategoriesRouter = require('./assetSubCategories.router');
 const specificationCategoriesRouter = require('./specificationCategories.routes');
 const consumableCategoriesRouter = require('./consumableCategories.routes');
+const maintenanceRouter = require('./maintenance.router');
+const calibrationRouter = require('./calibration.router');
 
 // Use asset sub-categories router
 router.use('/consumable-categories', consumableCategoriesRouter);
@@ -21,6 +23,8 @@ router.use('/plants', plantsRouter);
 router.use('/areas', areasRouter);
 router.use('/asset-categories', assetCategoriesRouter);
 router.use(authMiddleware);
+router.use('/maintenance', maintenanceRouter);  // ✅ Bảo vệ bằng authMiddleware
+router.use('/calibration', calibrationRouter);  // ✅ Bảo vệ bằng authMiddleware
 router.use('/assets', assetsRouter);
 
 

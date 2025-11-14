@@ -11,6 +11,13 @@ const { AssetSubCategories } = require('./assetSubCategories.model');
 const { SpecificationCategories } = require('./specificationCategories.model');
 const { AssetSpecifications } = require('./assetSpecifications.model');
 const { ConsumableCategories } = require('./consumableCategories.model');
+const { MaintenanceConsumables } = require('./maintenanceConsumables.model');
+
+// Import Maintenance after Assets
+const { Maintenance } = require('./maintenance.model');
+
+// Import Calibration
+const { Calibration } = require('./calibration.model');
 
 // ================== EXISTING ASSOCIATIONS ==================
 // Define associations
@@ -142,6 +149,46 @@ AssetSubCategories.hasMany(Assets, {
     as: 'Assets'
 });
 
+// ================== MAINTENANCE ASSOCIATIONS ==================
+// TEMPORARILY DISABLED - Associations causing server startup issues
+// Will re-enable after fixing dependency issues
+/*
+Maintenance.belongsTo(Assets, {
+    foreignKey: 'asset_id',
+    targetKey: 'id',
+    as: 'asset'
+});
+Assets.hasMany(Maintenance, {
+    foreignKey: 'asset_id',
+    sourceKey: 'id',
+    as: 'maintenance_records'
+});
+
+// Maintenance - User associations (technician)
+Maintenance.belongsTo(User, {
+    foreignKey: 'technician_id',
+    targetKey: 'id',
+    as: 'technician'
+});
+User.hasMany(Maintenance, {
+    foreignKey: 'technician_id',
+    sourceKey: 'id',
+    as: 'maintenance_tasks'
+});
+
+// Maintenance - User associations (created_by)
+Maintenance.belongsTo(User, {
+    foreignKey: 'created_by',
+    targetKey: 'id',
+    as: 'creator'
+});
+User.hasMany(Maintenance, {
+    foreignKey: 'created_by',
+    sourceKey: 'id',
+    as: 'created_maintenance'
+});
+*/
+
 // ================== SPECIFICATIONS ASSOCIATIONS ==================
 
 // 1. AssetSubCategories - SpecificationCategories (One-to-Many)
@@ -265,6 +312,7 @@ ConsumableCategories.belongsTo(User, {
     as: 'Updater'
 });
 
+// ================== SINGLE MODULE.EXPORTS ==================
 module.exports = {
     User,
     Departments,
@@ -278,5 +326,107 @@ module.exports = {
     AssetSubCategories,
     SpecificationCategories,
     AssetSpecifications,
-    ConsumableCategories
+    ConsumableCategories,
+    MaintenanceConsumables,
+    Maintenance,
+    Calibration
 };
+
+// ================== MAINTENANCE ASSOCIATIONS ==================
+// Define associations after all models are loaded to avoid circular dependencies
+Maintenance.belongsTo(Assets, {
+    foreignKey: 'asset_id',
+    targetKey: 'id',
+    as: 'asset'
+});
+Assets.hasMany(Maintenance, {
+    foreignKey: 'asset_id',
+    sourceKey: 'id',
+    as: 'maintenance_records'
+});
+
+// Maintenance - User associations (technician)
+Maintenance.belongsTo(User, {
+    foreignKey: 'technician_id',
+    targetKey: 'id',
+    as: 'technician'
+});
+User.hasMany(Maintenance, {
+    foreignKey: 'technician_id',
+    sourceKey: 'id',
+    as: 'maintenance_tasks'
+});
+
+// Maintenance - User associations (created_by)
+Maintenance.belongsTo(User, {
+    foreignKey: 'created_by',
+    targetKey: 'id',
+    as: 'creator'
+});
+User.hasMany(Maintenance, {
+    foreignKey: 'created_by',
+    sourceKey: 'id',
+    as: 'created_maintenance'
+});
+
+// ================== CALIBRATION ASSOCIATIONS ==================
+// Define associations after all models are loaded to avoid circular dependencies
+Calibration.belongsTo(Assets, {
+    foreignKey: 'asset_id',
+    targetKey: 'id',
+    as: 'asset'
+});
+Assets.hasMany(Calibration, {
+    foreignKey: 'asset_id',
+    sourceKey: 'id',
+    as: 'calibration_records'
+});
+
+// Calibration - User associations (technician)
+Calibration.belongsTo(User, {
+    foreignKey: 'technician_id',
+    targetKey: 'id',
+    as: 'technician'
+});
+User.hasMany(Calibration, {
+    foreignKey: 'technician_id',
+    sourceKey: 'id',
+    as: 'calibration_tasks'
+});
+
+// Calibration - User associations (created_by)
+Calibration.belongsTo(User, {
+    foreignKey: 'created_by',
+    targetKey: 'id',
+    as: 'creator'
+});
+User.hasMany(Calibration, {
+    foreignKey: 'created_by',
+    sourceKey: 'id',
+    as: 'created_calibrations'
+});
+
+// ================== MAINTENANCE CONSUMABLES ASSOCIATIONS ==================
+// MaintenanceConsumables - Maintenance associations
+MaintenanceConsumables.belongsTo(Maintenance, {
+    foreignKey: 'maintenance_id',
+    targetKey: 'id',
+    as: 'maintenance'
+});
+Maintenance.hasMany(MaintenanceConsumables, {
+    foreignKey: 'maintenance_id',
+    sourceKey: 'id',
+    as: 'maintenance_consumables'
+});
+
+// MaintenanceConsumables - ConsumableCategories associations
+MaintenanceConsumables.belongsTo(ConsumableCategories, {
+    foreignKey: 'consumable_category_id',
+    targetKey: 'id',
+    as: 'consumable_category'
+});
+ConsumableCategories.hasMany(MaintenanceConsumables, {
+    foreignKey: 'consumable_category_id',
+    sourceKey: 'id',
+    as: 'maintenance_usage'
+});
