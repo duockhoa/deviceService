@@ -1,4 +1,4 @@
-const { Assets, AssetCategories, AssetSubCategories, User, Departments, Areas, Plants, AssetGeneralInfo, AssetComponent, AssetSpecifications, AssetAttachment, AssetConsumables } = require('../models');
+const { Assets, AssetCategories, AssetSubCategories, User, Departments, Areas, Plants, AssetGeneralInfo, AssetComponent, AssetSpecifications, AssetAttachment, AssetConsumables, SpecificationCategories, Maintenance, MaintenanceChecklist, MaintenanceProgress, MaintenanceImages, MaintenanceConsumables, MaintenanceAttachments } = require('../models');
 const  sequelize  = require('../configs/sequelize');
 const XLSX = require('xlsx');
 
@@ -135,6 +135,13 @@ const getAssetById = async (req, res) => {
                         'remarks',
                         'verified_at',
                         'verified_by'
+                    ],
+                    include: [
+                        {
+                            model: SpecificationCategories,
+                            as: 'SpecCategory',
+                            attributes: ['id', 'spec_code', 'spec_name', 'unit', 'data_type']
+                        }
                     ]
                 },
                 // Include Attachments
@@ -527,14 +534,72 @@ const deleteAsset = async (req, res) => {
             });
         }
 
-        // Xóa components trước (nếu không có foreign key cascade)
+        // Xóa tất cả related data trước (nếu không có foreign key cascade)
+        
+        // Lấy danh sách maintenance_id của asset này để xóa related tables
+        const maintenanceRecords = await Maintenance.findAll({
+            where: { asset_id: id },
+            attributes: ['id'],
+            transaction: t
+        });
+        const maintenanceIds = maintenanceRecords.map(m => m.id);
+
+        // Xóa tất cả maintenance related data
+        if (maintenanceIds.length > 0) {
+            await MaintenanceChecklist.destroy({
+                where: { maintenance_id: maintenanceIds },
+                transaction: t
+            });
+
+            await MaintenanceProgress.destroy({
+                where: { maintenance_id: maintenanceIds },
+                transaction: t
+            });
+
+            await MaintenanceImages.destroy({
+                where: { maintenance_id: maintenanceIds },
+                transaction: t
+            });
+
+            await MaintenanceConsumables.destroy({
+                where: { maintenance_id: maintenanceIds },
+                transaction: t
+            });
+
+            await MaintenanceAttachments.destroy({
+                where: { maintenance_id: maintenanceIds },
+                transaction: t
+            });
+        }
+
+        // Xóa maintenance records của asset này
+        await Maintenance.destroy({
+            where: { asset_id: id },
+            transaction: t
+        });
+
+        // Xóa asset related data
         await AssetComponent.destroy({
             where: { asset_id: id },
             transaction: t
         });
 
-        // Xóa general info (nếu không có foreign key cascade)
         await AssetGeneralInfo.destroy({
+            where: { asset_id: id },
+            transaction: t
+        });
+
+        await AssetSpecifications.destroy({
+            where: { asset_id: id },
+            transaction: t
+        });
+
+        await AssetAttachment.destroy({
+            where: { asset_id: id },
+            transaction: t
+        });
+
+        await AssetConsumables.destroy({
             where: { asset_id: id },
             transaction: t
         });
@@ -550,6 +615,7 @@ const deleteAsset = async (req, res) => {
         });
     } catch (error) {
         await t.rollback();
+        console.error('Error deleting asset:', error);
         res.status(500).json({
             success: false,
             message: 'Error deleting asset',
@@ -934,6 +1000,31 @@ const exportTemplate = async (req, res) => {
             }
         ];
 
+        // Sheet 4: Thông số kỹ thuật
+        const specificationsTemplate = [
+            {
+                'Mã thiết bị (*)': 'TB-001',
+                'Mã thông số (*)': 'POWER',
+                'Giá trị': '15 kW',
+                'Giá trị số': '15',
+                'Ghi chú': ''
+            },
+            {
+                'Mã thiết bị (*)': 'TB-001',
+                'Mã thông số (*)': 'VOLTAGE',
+                'Giá trị': '380 V',
+                'Giá trị số': '380',
+                'Ghi chú': ''
+            },
+            {
+                'Mã thiết bị (*)': 'TB-001',
+                'Mã thông số (*)': 'FREQUENCY',
+                'Giá trị': '50 Hz',
+                'Giá trị số': '50',
+                'Ghi chú': ''
+            }
+        ];
+
         // Tạo workbook
         const wb = XLSX.utils.book_new();
         
@@ -963,7 +1054,14 @@ const exportTemplate = async (req, res) => {
         ];
         XLSX.utils.book_append_sheet(wb, wsConsumables, 'Vật tư tiêu hao');
 
-        // Sheet 4: Hướng dẫn
+        // Sheet 4: Thông số kỹ thuật
+        const wsSpecifications = XLSX.utils.json_to_sheet(specificationsTemplate);
+        wsSpecifications['!cols'] = [
+            { wch: 20 }, { wch: 20 }, { wch: 25 }, { wch: 15 }, { wch: 30 }
+        ];
+        XLSX.utils.book_append_sheet(wb, wsSpecifications, 'Thông số kỹ thuật');
+
+        // Sheet 5: Hướng dẫn
         const instructions = [
             { 'Nội dung': '📋 HƯỚNG DẪN SỬ DỤNG TEMPLATE IMPORT THIẾT BỊ' },
             { 'Nội dung': '' },
@@ -997,7 +1095,7 @@ const exportTemplate = async (req, res) => {
         wsInstructions['!cols'] = [{ wch: 80 }];
         XLSX.utils.book_append_sheet(wb, wsInstructions, 'Hướng dẫn');
 
-        // Sheet 5: Danh mục phụ reference
+        // Sheet 6: Danh mục phụ reference
         const subCatData = subCategories.map(sc => ({
             'Mã danh mục phụ': sc.code,
             'Tên danh mục phụ': sc.name,
@@ -1006,7 +1104,7 @@ const exportTemplate = async (req, res) => {
         const wsSubCat = XLSX.utils.json_to_sheet(subCatData);
         XLSX.utils.book_append_sheet(wb, wsSubCat, 'Danh mục phụ');
 
-        // Sheet 6: Khu vực reference
+        // Sheet 7: Khu vực reference
         const areaData = areas.map(a => ({
             'Mã khu vực': a.code,
             'Tên khu vực': a.name
@@ -1014,12 +1112,26 @@ const exportTemplate = async (req, res) => {
         const wsArea = XLSX.utils.json_to_sheet(areaData);
         XLSX.utils.book_append_sheet(wb, wsArea, 'Khu vực');
 
-        // Sheet 7: Phòng ban reference
+        // Sheet 8: Phòng ban reference
         const deptData = departments.map(d => ({
             'Tên phòng ban': d.name
         }));
         const wsDept = XLSX.utils.json_to_sheet(deptData);
         XLSX.utils.book_append_sheet(wb, wsDept, 'Phòng ban');
+
+        // Sheet 9: Thông số kỹ thuật categories reference
+        const specCategories = await SpecificationCategories.findAll({
+            attributes: ['id', 'spec_code', 'spec_name', 'unit', 'data_type'],
+            order: [['spec_code', 'ASC']]
+        });
+        const specCatData = specCategories.map(sc => ({
+            'Mã thông số': sc.spec_code,
+            'Tên thông số': sc.spec_name,
+            'Đơn vị': sc.unit || '',
+            'Kiểu dữ liệu': sc.data_type
+        }));
+        const wsSpecCat = XLSX.utils.json_to_sheet(specCatData);
+        XLSX.utils.book_append_sheet(wb, wsSpecCat, 'Danh mục thông số');
 
         // Generate buffer
         const excelBuffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
@@ -1051,6 +1163,40 @@ const importFromExcel = async (req, res) => {
             });
         }
 
+        // Helper function to convert Excel date serial number to MySQL date format
+        const excelDateToMySQL = (excelDate) => {
+            if (!excelDate) return null;
+            
+            // If already a string in YYYY-MM-DD format, return as is
+            if (typeof excelDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(excelDate)) {
+                return excelDate;
+            }
+            
+            // If it's an Excel serial number
+            if (typeof excelDate === 'number') {
+                const date = new Date((excelDate - 25569) * 86400 * 1000);
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            }
+            
+            // Try to parse as date string
+            try {
+                const date = new Date(excelDate);
+                if (!isNaN(date.getTime())) {
+                    const year = date.getFullYear();
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const day = String(date.getDate()).padStart(2, '0');
+                    return `${year}-${month}-${day}`;
+                }
+            } catch (e) {
+                return null;
+            }
+            
+            return null;
+        };
+
         // Read Excel file
         const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
         
@@ -1067,6 +1213,10 @@ const importFromExcel = async (req, res) => {
         const consumablesSheetName = workbook.SheetNames.find(name => name.includes('Vật tư'));
         const consumablesData = consumablesSheetName ? XLSX.utils.sheet_to_json(workbook.Sheets[consumablesSheetName]) : [];
 
+        // Read specifications sheet if exists
+        const specificationsSheetName = workbook.SheetNames.find(name => name.includes('Thông số'));
+        const specificationsData = specificationsSheetName ? XLSX.utils.sheet_to_json(workbook.Sheets[specificationsSheetName]) : [];
+
         if (mainData.length === 0) {
             return res.status(400).json({
                 success: false,
@@ -1076,13 +1226,15 @@ const importFromExcel = async (req, res) => {
 
         const results = {
             success: [],
-            errors: []
+            errors: [],
+            skipped: []
         };
 
         // Get lookup data
         const subCategories = await AssetSubCategories.findAll();
         const areas = await Areas.findAll();
         const departments = await Departments.findAll();
+        const specCategories = await SpecificationCategories.findAll();
 
         // Process each row
         for (let i = 0; i < mainData.length; i++) {
@@ -1135,9 +1287,11 @@ const importFromExcel = async (req, res) => {
                 });
 
                 if (existingAsset) {
-                    results.errors.push({
+                    results.skipped.push({
                         row: rowNum,
-                        error: `Mã thiết bị đã tồn tại: ${row['Mã thiết bị (*)']}`
+                        asset_code: assetCode,
+                        name: row['Tên thiết bị (*)'],
+                        reason: `Mã thiết bị đã tồn tại trong hệ thống`
                     });
                     continue;
                 }
@@ -1163,7 +1317,7 @@ const importFromExcel = async (req, res) => {
                         model: row['Model'] || null,
                         serial_number: row['Serial number'] || null,
                         warranty_period_months: row['Thời hạn bảo hành (tháng)'] ? parseInt(row['Thời hạn bảo hành (tháng)']) : null,
-                        warranty_expiry_date: row['Ngày hết bảo hành'] || null,
+                        warranty_expiry_date: excelDateToMySQL(row['Ngày hết bảo hành']),
                         supplier: row['Nhà cung cấp'] || null,
                         description: row['Mô tả'] || null
                     }, { transaction: t });
@@ -1171,6 +1325,7 @@ const importFromExcel = async (req, res) => {
 
                 // Create components from components sheet
                 const assetComponents = componentsData.filter(comp => comp['Mã thiết bị (*)'] === assetCode);
+                console.log(`[Import] Asset ${assetCode}: Found ${assetComponents.length} components in sheet`);
                 if (assetComponents.length > 0) {
                     const componentsToCreate = assetComponents
                         .filter(comp => comp['Tên thành phần']) // Only create if has name
@@ -1186,11 +1341,13 @@ const importFromExcel = async (req, res) => {
                     
                     if (componentsToCreate.length > 0) {
                         await AssetComponent.bulkCreate(componentsToCreate, { transaction: t });
+                        console.log(`[Import] Created ${componentsToCreate.length} components for ${assetCode}`);
                     }
                 }
 
                 // Create consumables from consumables sheet
                 const assetConsumables = consumablesData.filter(cons => cons['Mã thiết bị (*)'] === assetCode);
+                console.log(`[Import] Asset ${assetCode}: Found ${assetConsumables.length} consumables in sheet`);
                 if (assetConsumables.length > 0) {
                     const consumablesToCreate = assetConsumables
                         .filter(cons => cons['Tên vật tư']) // Only create if has name
@@ -1207,6 +1364,39 @@ const importFromExcel = async (req, res) => {
                     
                     if (consumablesToCreate.length > 0) {
                         await AssetConsumables.bulkCreate(consumablesToCreate, { transaction: t });
+                        console.log(`[Import] Created ${consumablesToCreate.length} consumables for ${assetCode}`);
+                    }
+                }
+
+                // Create specifications from specifications sheet
+                const assetSpecifications = specificationsData.filter(spec => spec['Mã thiết bị (*)'] === assetCode);
+                console.log(`[Import] Asset ${assetCode}: Found ${assetSpecifications.length} specifications in sheet`);
+                if (assetSpecifications.length > 0) {
+                    const specificationsToCreate = assetSpecifications
+                        .filter(spec => spec['Mã thông số (*)']) // Only create if has spec code
+                        .map(spec => {
+                            const excelSpecCode = spec['Mã thông số (*)'];
+                            const specCat = specCategories.find(sc => sc.spec_code === excelSpecCode);
+                            if (!specCat) {
+                                console.log(`[Import] WARNING: Spec code "${excelSpecCode}" not found in categories. Available codes:`, specCategories.map(sc => sc.spec_code).join(', '));
+                                return null;
+                            }
+                            
+                            return {
+                                asset_id: asset.id,
+                                spec_category_id: specCat.id,
+                                value: spec['Giá trị'] || null,
+                                numeric_value: spec['Giá trị số'] ? parseFloat(spec['Giá trị số']) : null,
+                                remarks: spec['Ghi chú'] || null
+                            };
+                        })
+                        .filter(spec => spec !== null); // Remove invalid specs
+                    
+                    if (specificationsToCreate.length > 0) {
+                        await AssetSpecifications.bulkCreate(specificationsToCreate, { transaction: t });
+                        console.log(`[Import] Created ${specificationsToCreate.length} specifications for ${assetCode}`);
+                    } else {
+                        console.log(`[Import] No valid specifications to create for ${assetCode} (all spec codes not found)`);
                     }
                 }
 
@@ -1215,13 +1405,19 @@ const importFromExcel = async (req, res) => {
                     asset_code: assetCode,
                     name: row['Tên thiết bị (*)'],
                     components: assetComponents.length,
-                    consumables: assetConsumables.length
+                    consumables: assetConsumables.length,
+                    specifications: assetSpecifications.length
                 });
 
             } catch (error) {
+                console.error(`[Import] Error at row ${rowNum}:`, error);
+                console.error(`[Import] Error details - Name: ${error.name}, Message: ${error.message}`);
+                if (error.errors && error.errors.length > 0) {
+                    console.error(`[Import] Validation errors:`, error.errors.map(e => e.message).join(', '));
+                }
                 results.errors.push({
                     row: rowNum,
-                    error: error.message
+                    error: error.errors ? error.errors.map(e => e.message).join('; ') : (error.message || error.toString())
                 });
             }
         }
@@ -1230,7 +1426,7 @@ const importFromExcel = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            message: `Import hoàn tất: ${results.success.length} thành công, ${results.errors.length} lỗi`,
+            message: `Import hoàn tất: ${results.success.length} thành công, ${results.skipped.length} bỏ qua, ${results.errors.length} lỗi`,
             data: results
         });
 
@@ -1240,6 +1436,30 @@ const importFromExcel = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Lỗi khi import dữ liệu',
+            error: error.message
+        });
+    }
+};
+
+// GET /api/assets/:id/consumables - Lấy vật tư tiêu hao của asset
+const getAssetConsumables = async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const consumables = await AssetConsumables.findAll({
+            where: { asset_id: id },
+            order: [['created_at', 'ASC']]
+        });
+
+        res.status(200).json({
+            success: true,
+            data: consumables,
+            count: consumables.length
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching asset consumables',
             error: error.message
         });
     }
@@ -1257,6 +1477,7 @@ module.exports = {
     getAssetsByDepartment,
     searchAssets,
     getAssetByCode,
+    getAssetConsumables,
     exportTemplate,
     importFromExcel
 };

@@ -15,6 +15,7 @@ const {
     getAssetsByDepartment,
     searchAssets,
     getAssetByCode,
+    getAssetConsumables,        // Lấy vật tư tiêu hao
     exportTemplate,
     importFromExcel
 } = require("../controllers/assets.controllers");
@@ -29,6 +30,7 @@ router.get('/by-area/:areaId', getAssetsByArea);
 router.get('/by-sub-category/:subCategoryId', getAssetsBySubCategory);  // Route mới
 router.get('/by-category/:categoryId', getAssetsByCategory);             // Logic mới
 router.get('/by-department/:departmentName', getAssetsByDepartment);
+router.get('/:id/consumables', getAssetConsumables);  // Lấy vật tư tiêu hao - PHẢI đặt trước /:id
 router.get('/:id', getAssetById);
 router.post('/', createAsset);
 router.put('/:id', updateAsset);

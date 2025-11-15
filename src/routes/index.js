@@ -12,6 +12,7 @@ const assetSubCategoriesRouter = require('./assetSubCategories.router');
 const specificationCategoriesRouter = require('./specificationCategories.routes');
 const consumableCategoriesRouter = require('./consumableCategories.routes');
 const maintenanceRouter = require('./maintenance.router');
+const maintenanceWorkRouter = require('./maintenanceWork.router');
 const calibrationRouter = require('./calibration.router');
 
 // Use asset sub-categories router
@@ -24,6 +25,7 @@ router.use('/areas', areasRouter);
 router.use('/asset-categories', assetCategoriesRouter);
 router.use(authMiddleware);
 router.use('/maintenance', maintenanceRouter);  // ✅ Bảo vệ bằng authMiddleware
+router.use('/maintenance-work', maintenanceWorkRouter);  // ✅ Work orders cho kỹ thuật viên
 router.use('/calibration', calibrationRouter);  // ✅ Bảo vệ bằng authMiddleware
 router.use('/assets', assetsRouter);
 

@@ -16,6 +16,10 @@ const { AssetConsumables } = require('./assetConsumables.model');
 
 // Import Maintenance after Assets
 const { Maintenance } = require('./maintenance.model');
+const { MaintenanceChecklist } = require('./maintenanceChecklist.model');
+const { MaintenanceProgress } = require('./maintenanceProgress.model');
+const { MaintenanceImages } = require('./maintenanceImages.model');
+const MaintenanceAttachments = require('./maintenanceAttachments.model');
 
 // Import Calibration
 const { Calibration } = require('./calibration.model');
@@ -344,6 +348,10 @@ module.exports = {
     MaintenanceConsumables,
     AssetConsumables,
     Maintenance,
+    MaintenanceChecklist,
+    MaintenanceProgress,
+    MaintenanceImages,
+    MaintenanceAttachments,
     Calibration
 };
 
@@ -382,6 +390,81 @@ User.hasMany(Maintenance, {
     foreignKey: 'created_by',
     sourceKey: 'id',
     as: 'created_maintenance'
+});
+
+// Maintenance - MaintenanceChecklist associations
+Maintenance.hasMany(MaintenanceChecklist, {
+    foreignKey: 'maintenance_id',
+    sourceKey: 'id',
+    as: 'checklists',
+    onDelete: 'CASCADE'
+});
+MaintenanceChecklist.belongsTo(Maintenance, {
+    foreignKey: 'maintenance_id',
+    targetKey: 'id',
+    as: 'maintenance'
+});
+
+// Maintenance - MaintenanceProgress associations
+Maintenance.hasMany(MaintenanceProgress, {
+    foreignKey: 'maintenance_id',
+    sourceKey: 'id',
+    as: 'progress_updates',
+    onDelete: 'CASCADE'
+});
+MaintenanceProgress.belongsTo(Maintenance, {
+    foreignKey: 'maintenance_id',
+    targetKey: 'id',
+    as: 'maintenance'
+});
+
+// Maintenance - MaintenanceImages associations
+Maintenance.hasMany(MaintenanceImages, {
+    foreignKey: 'maintenance_id',
+    sourceKey: 'id',
+    as: 'images',
+    onDelete: 'CASCADE'
+});
+MaintenanceImages.belongsTo(Maintenance, {
+    foreignKey: 'maintenance_id',
+    targetKey: 'id',
+    as: 'maintenance'
+});
+
+// User - MaintenanceProgress associations
+User.hasMany(MaintenanceProgress, {
+    foreignKey: 'updated_by',
+    sourceKey: 'id',
+    as: 'progress_updates'
+});
+MaintenanceProgress.belongsTo(User, {
+    foreignKey: 'updated_by',
+    targetKey: 'id',
+    as: 'updater'
+});
+
+// User - MaintenanceImages associations
+User.hasMany(MaintenanceImages, {
+    foreignKey: 'uploaded_by',
+    sourceKey: 'id',
+    as: 'uploaded_images'
+});
+MaintenanceImages.belongsTo(User, {
+    foreignKey: 'uploaded_by',
+    targetKey: 'id',
+    as: 'uploader'
+});
+
+// User - MaintenanceChecklist associations
+User.hasMany(MaintenanceChecklist, {
+    foreignKey: 'completed_by',
+    sourceKey: 'id',
+    as: 'completed_tasks'
+});
+MaintenanceChecklist.belongsTo(User, {
+    foreignKey: 'completed_by',
+    targetKey: 'id',
+    as: 'completer'
 });
 
 // ================== CALIBRATION ASSOCIATIONS ==================
@@ -444,4 +527,29 @@ ConsumableCategories.hasMany(MaintenanceConsumables, {
     foreignKey: 'consumable_category_id',
     sourceKey: 'id',
     as: 'maintenance_usage'
+});
+
+// ================== MAINTENANCE ATTACHMENTS ASSOCIATIONS ==================
+// MaintenanceAttachments - Maintenance associations
+MaintenanceAttachments.belongsTo(Maintenance, {
+    foreignKey: 'maintenance_id',
+    targetKey: 'id',
+    as: 'maintenance'
+});
+Maintenance.hasMany(MaintenanceAttachments, {
+    foreignKey: 'maintenance_id',
+    sourceKey: 'id',
+    as: 'attachments'
+});
+
+// MaintenanceAttachments - User associations (uploaded_by)
+MaintenanceAttachments.belongsTo(User, {
+    foreignKey: 'uploaded_by',
+    targetKey: 'id',
+    as: 'uploader'
+});
+User.hasMany(MaintenanceAttachments, {
+    foreignKey: 'uploaded_by',
+    sourceKey: 'id',
+    as: 'uploaded_attachments'
 });

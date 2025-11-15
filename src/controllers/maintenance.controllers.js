@@ -1,4 +1,4 @@
-const { Maintenance, Assets, User, MaintenanceConsumables } = require('../models');
+const { Maintenance, Assets, User, MaintenanceConsumables, MaintenanceChecklist } = require('../models');
 
 // GET /api/maintenance - Lấy tất cả maintenance records
 const getAllMaintenance = async (req, res) => {
@@ -62,6 +62,12 @@ const getMaintenanceById = async (req, res) => {
                         as: 'consumableCategory',
                         attributes: ['id', 'name', 'unit', 'description']
                     }]
+                },
+                {
+                    model: MaintenanceChecklist,
+                    as: 'checklists',
+                    attributes: ['id', 'task_name', 'description', 'is_completed', 'order_index', 'notes'],
+                    order: [['order_index', 'ASC']]
                 }
             ]
         });
@@ -197,7 +203,7 @@ const createMaintenance = async (req, res) => {
     try {
         transaction = await Maintenance.sequelize.transaction();
         
-        const { consumables, ...maintenanceData } = req.body;
+        const { consumables, checklist, ...maintenanceData } = req.body;
 
         // Validate created_by: require auth or explicit created_by from body
         if (!req.user && (!maintenanceData.created_by || maintenanceData.created_by === null)) {
@@ -272,6 +278,23 @@ const createMaintenance = async (req, res) => {
             await MaintenanceConsumables.bulkCreate(consumableRecords, { transaction });
         }
 
+        // Handle checklist if provided
+        if (checklist && Array.isArray(checklist) && checklist.length > 0) {
+            const checklistRecords = checklist.map((item, index) => ({
+                maintenance_id: maintenance.id,
+                task_name: item.task || item.task_name,
+                check_item: item.check_item || null,
+                standard_value: item.standard_value || null,
+                check_method: item.check_method || null,
+                description: item.description || null,
+                is_completed: false,
+                order_index: item.order_index !== undefined ? item.order_index : index,
+                notes: item.notes || null
+            }));
+
+            await MaintenanceChecklist.bulkCreate(checklistRecords, { transaction });
+        }
+
         // Commit transaction
         if (transaction && !transaction.finished) {
             await transaction.commit();
@@ -334,7 +357,7 @@ const updateMaintenance = async (req, res) => {
         transaction = await Maintenance.sequelize.transaction();
         
         const { id } = req.params;
-        const { consumables, ...updateData } = req.body;
+        const { consumables, checklist, ...updateData } = req.body;
 
         // Set default values for required fields if not provided or null
         if (!updateData.priority || updateData.priority === null || updateData.priority === '') {
@@ -430,6 +453,32 @@ const updateMaintenance = async (req, res) => {
                 }));
 
                 await MaintenanceConsumables.bulkCreate(consumableRecords, { transaction });
+            }
+        }
+
+        // Handle checklist update
+        if (checklist !== undefined) {
+            // Delete existing checklist items
+            await MaintenanceChecklist.destroy({
+                where: { maintenance_id: id },
+                transaction
+            });
+
+            // Create new checklist items if provided
+            if (Array.isArray(checklist) && checklist.length > 0) {
+                const checklistRecords = checklist.map((item, index) => ({
+                    maintenance_id: parseInt(id),
+                    task_name: item.task || item.task_name,
+                    check_item: item.check_item || null,
+                    standard_value: item.standard_value || null,
+                    check_method: item.check_method || null,
+                    description: item.description || null,
+                    is_completed: false,
+                    order_index: item.order_index !== undefined ? item.order_index : index,
+                    notes: item.notes || null
+                }));
+
+                await MaintenanceChecklist.bulkCreate(checklistRecords, { transaction });
             }
         }
 

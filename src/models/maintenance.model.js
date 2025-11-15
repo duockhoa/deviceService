@@ -34,7 +34,7 @@ const Maintenance = sequelize.define('maintenance', {
         comment: 'Mức độ ưu tiên của công việc bảo trì'
     },
     status: {
-        type: DataTypes.ENUM('pending', 'in_progress', 'completed', 'cancelled'),
+        type: DataTypes.ENUM('pending', 'in_progress', 'completed', 'approved', 'cancelled'),
         allowNull: false,
         defaultValue: 'pending',
         comment: 'Trạng thái của công việc bảo trì'
