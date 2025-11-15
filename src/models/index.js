@@ -12,6 +12,7 @@ const { SpecificationCategories } = require('./specificationCategories.model');
 const { AssetSpecifications } = require('./assetSpecifications.model');
 const { ConsumableCategories } = require('./consumableCategories.model');
 const { MaintenanceConsumables } = require('./maintenanceConsumables.model');
+const { AssetConsumables } = require('./assetConsumables.model');
 
 // Import Maintenance after Assets
 const { Maintenance } = require('./maintenance.model');
@@ -289,6 +290,19 @@ AssetSpecifications.belongsTo(User, {
 
 // ================== CONSUMABLE CATEGORIES ASSOCIATIONS ==================
 
+// Assets - AssetConsumables (One-to-Many)
+Assets.hasMany(AssetConsumables, {
+    foreignKey: 'asset_id',
+    sourceKey: 'id',
+    as: 'Consumables',
+    onDelete: 'CASCADE'
+});
+AssetConsumables.belongsTo(Assets, {
+    foreignKey: 'asset_id',
+    targetKey: 'id',
+    as: 'Asset'
+});
+
 // 1. User - ConsumableCategories associations (created_by, updated_by)
 User.hasMany(ConsumableCategories, {
     foreignKey: 'created_by',
@@ -328,6 +342,7 @@ module.exports = {
     AssetSpecifications,
     ConsumableCategories,
     MaintenanceConsumables,
+    AssetConsumables,
     Maintenance,
     Calibration
 };

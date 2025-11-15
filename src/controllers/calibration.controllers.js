@@ -4,6 +4,18 @@ const { Calibration, Assets, User } = require('../models');
 const getAllCalibrations = async (req, res) => {
     try {
         const calibrations = await Calibration.findAll({
+            include: [
+                {
+                    model: Assets,
+                    as: 'asset',
+                    attributes: ['id', 'asset_code', 'name']
+                },
+                {
+                    model: User,
+                    as: 'technician',
+                    attributes: ['id', 'name', 'email']
+                }
+            ],
             order: [['scheduled_date', 'DESC']]
         });
 

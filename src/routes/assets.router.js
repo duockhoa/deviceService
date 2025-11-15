@@ -1,5 +1,8 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage() });
+
 const {
     getAssetById,
     getAllAssets,
@@ -11,12 +14,16 @@ const {
     getAssetsByCategory,        // Cập nhật logic (thông qua sub categories)
     getAssetsByDepartment,
     searchAssets,
-    getAssetByCode
+    getAssetByCode,
+    exportTemplate,
+    importFromExcel
 } = require("../controllers/assets.controllers");
 
 // CRUD routes
 router.get('/', getAllAssets);
 router.get('/search', searchAssets); // Đặt trước /:id để tránh conflict
+router.get('/export/template', exportTemplate); // Export Excel template
+router.post('/import/excel', upload.single('file'), importFromExcel); // Import from Excel
 router.get('/by-code/:assetCode', getAssetByCode);
 router.get('/by-area/:areaId', getAssetsByArea);
 router.get('/by-sub-category/:subCategoryId', getAssetsBySubCategory);  // Route mới
