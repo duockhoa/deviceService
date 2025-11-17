@@ -369,9 +369,19 @@ const completeWork = async (req, res) => {
             });
         }
 
+        // Tính actual_duration nếu có actual_start_date
+        let actual_duration = null;
+        const actual_end_date = new Date();
+        
+        if (maintenance.actual_start_date) {
+            const diffMs = actual_end_date - new Date(maintenance.actual_start_date);
+            actual_duration = (diffMs / (1000 * 60 * 60)).toFixed(2); // Convert to hours
+        }
+
         await maintenance.update({
-            status: 'completed', // Trưởng BP sẽ duyệt sau
-            actual_end_date: new Date(),
+            status: 'awaiting_approval',
+            actual_end_date: actual_end_date,
+            actual_duration: actual_duration,
             notes: final_notes || maintenance.notes
         });
 
@@ -456,9 +466,9 @@ const approveWork = async (req, res) => {
         }
 
         if (approved) {
-            // Phê duyệt - chuyển sang status 'approved' để vào Hồ sơ bảo trì
+            // Phê duyệt - chuyển sang status 'completed' (hoàn thành)
             await maintenance.update({
-                status: 'approved',
+                status: 'completed',
                 notes: `${maintenance.notes || ''}\n[Đã duyệt bởi User ID: ${userId} vào ${new Date().toLocaleString('vi-VN')}]`.trim()
             });
 

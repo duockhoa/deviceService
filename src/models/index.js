@@ -17,6 +17,7 @@ const { AssetConsumables } = require('./assetConsumables.model');
 // Import Maintenance after Assets
 const { Maintenance } = require('./maintenance.model');
 const { MaintenanceChecklist } = require('./maintenanceChecklist.model');
+const { MaintenanceWorkTask } = require('./maintenanceWorkTask.model');
 const { MaintenanceProgress } = require('./maintenanceProgress.model');
 const { MaintenanceImages } = require('./maintenanceImages.model');
 const MaintenanceAttachments = require('./maintenanceAttachments.model');
@@ -349,6 +350,7 @@ module.exports = {
     AssetConsumables,
     Maintenance,
     MaintenanceChecklist,
+    MaintenanceWorkTask,
     MaintenanceProgress,
     MaintenanceImages,
     MaintenanceAttachments,
@@ -400,6 +402,19 @@ Maintenance.hasMany(MaintenanceChecklist, {
     onDelete: 'CASCADE'
 });
 MaintenanceChecklist.belongsTo(Maintenance, {
+    foreignKey: 'maintenance_id',
+    targetKey: 'id',
+    as: 'maintenance'
+});
+
+// Maintenance - MaintenanceWorkTask associations
+Maintenance.hasMany(MaintenanceWorkTask, {
+    foreignKey: 'maintenance_id',
+    sourceKey: 'id',
+    as: 'workTasks',
+    onDelete: 'CASCADE'
+});
+MaintenanceWorkTask.belongsTo(Maintenance, {
     foreignKey: 'maintenance_id',
     targetKey: 'id',
     as: 'maintenance'
@@ -514,19 +529,31 @@ MaintenanceConsumables.belongsTo(Maintenance, {
 Maintenance.hasMany(MaintenanceConsumables, {
     foreignKey: 'maintenance_id',
     sourceKey: 'id',
-    as: 'maintenance_consumables'
+    as: 'maintenanceConsumables'
 });
 
 // MaintenanceConsumables - ConsumableCategories associations
 MaintenanceConsumables.belongsTo(ConsumableCategories, {
     foreignKey: 'consumable_category_id',
     targetKey: 'id',
-    as: 'consumable_category'
+    as: 'consumableCategory'
 });
 ConsumableCategories.hasMany(MaintenanceConsumables, {
     foreignKey: 'consumable_category_id',
     sourceKey: 'id',
     as: 'maintenance_usage'
+});
+
+// MaintenanceConsumables - AssetConsumables associations
+MaintenanceConsumables.belongsTo(AssetConsumables, {
+    foreignKey: 'asset_consumable_id',
+    targetKey: 'id',
+    as: 'assetConsumable'
+});
+AssetConsumables.hasMany(MaintenanceConsumables, {
+    foreignKey: 'asset_consumable_id',
+    sourceKey: 'id',
+    as: 'maintenanceUsage'
 });
 
 // ================== MAINTENANCE ATTACHMENTS ASSOCIATIONS ==================

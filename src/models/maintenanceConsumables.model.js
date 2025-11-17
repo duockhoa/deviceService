@@ -18,12 +18,31 @@ const MaintenanceConsumables = sequelize.define('MaintenanceConsumables', {
     },
     consumable_category_id: {
         type: DataTypes.INTEGER,
-        allowNull: false,
+        allowNull: true,
         references: {
             model: 'consumable_categories',
             key: 'id'
         },
-        comment: 'ID danh mục vật tư tiêu hao'
+        comment: 'ID danh mục vật tư tiêu hao (optional nếu dùng asset_consumable_id)'
+    },
+    asset_consumable_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+            model: 'asset_consumables',
+            key: 'id'
+        },
+        comment: 'ID vật tư của thiết bị (nếu chọn từ asset_consumables)'
+    },
+    item_name: {
+        type: DataTypes.STRING(255),
+        allowNull: true,
+        comment: 'Tên vật tư (copy từ asset_consumables hoặc nhập tay)'
+    },
+    specification: {
+        type: DataTypes.STRING(500),
+        allowNull: true,
+        comment: 'Quy cách vật tư (copy từ asset_consumables hoặc nhập tay)'
     },
     quantity_required: {
         type: DataTypes.DECIMAL(10, 3),
@@ -92,6 +111,9 @@ const MaintenanceConsumables = sequelize.define('MaintenanceConsumables', {
         },
         {
             fields: ['consumable_category_id']
+        },
+        {
+            fields: ['asset_consumable_id']
         },
         {
             fields: ['status']

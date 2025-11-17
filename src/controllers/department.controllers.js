@@ -81,16 +81,36 @@ const getUsersByDepartment = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            data: {
-                department: department,
-                users: users,
-                count: users.length
-            }
+            data: users,
+            count: users.length
         });
     } catch (error) {
         res.status(500).json({
             success: false,
             message: 'Error fetching users by department',
+            error: error.message
+        });
+    }
+};
+
+// GET /api/departments/mechanical-electrical/technicians - Lấy nhân viên kỹ thuật cơ điện
+const getMechanicalElectricalTechnicians = async (req, res) => {
+    try {
+        const users = await User.findAll({
+            where: { department: 'xưởng cơ điện' },
+            attributes: ['id', 'name', 'employee_code', 'email', 'position', 'phoneNumber', 'department'],
+            order: [['name', 'ASC']]
+        });
+
+        res.status(200).json({
+            success: true,
+            data: users,
+            count: users.length
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching mechanical electrical technicians',
             error: error.message
         });
     }
@@ -142,5 +162,6 @@ module.exports = {
     getAllDepartments,
     getDepartmentByName,
     getUsersByDepartment,
-    getAssetsByDepartment
+    getAssetsByDepartment,
+    getMechanicalElectricalTechnicians
 };
