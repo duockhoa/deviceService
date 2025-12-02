@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const authMiddleware = require('../middleware/authMiddleware');
+const departmentGuard = require('../middleware/departmentGuard');
 const {
     getAllCalibrations,
     getCalibrationById,
@@ -10,6 +12,9 @@ const {
     updateCalibration,
     deleteCalibration
 } = require('../controllers/calibration.controllers');
+
+router.use(authMiddleware);
+router.use(departmentGuard(['xưởng cơ điện']));
 
 // CRUD routes
 router.get('/', getAllCalibrations);

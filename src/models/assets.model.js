@@ -42,6 +42,15 @@ const Assets = sequelize.define('assets', {
         type: DataTypes.STRING(255),
         allowNull: false
     },
+    description: {
+        type: DataTypes.TEXT,
+        allowNull: true
+    },
+    location: {
+        type: DataTypes.STRING(255),
+        allowNull: true,
+        comment: 'Vị trí đặt thiết bị'
+    },
     status: {
         type: DataTypes.ENUM('active', 'inactive'),
         allowNull: false,

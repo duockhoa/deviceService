@@ -22,10 +22,10 @@ const Maintenance = sequelize.define('maintenance', {
         }
     },
     maintenance_type: {
-        type: DataTypes.ENUM('preventive', 'corrective'),
+        type: DataTypes.ENUM('cleaning', 'inspection', 'maintenance', 'corrective', 'preventive'),
         allowNull: false,
-        defaultValue: 'preventive',
-        comment: 'Loại bảo trì: preventive (phòng ngừa) hoặc corrective (sửa chữa)'
+        defaultValue: 'maintenance',
+        comment: 'Loại bảo trì: vệ sinh, kiểm tra, bảo trì định kỳ, sửa chữa'
     },
     priority: {
         type: DataTypes.ENUM('low', 'medium', 'high', 'critical'),

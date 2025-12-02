@@ -1,4 +1,16 @@
 const { Maintenance, Assets, User, MaintenanceConsumables, MaintenanceChecklist, MaintenanceWorkTask } = require('../models');
+const { Op } = require('sequelize');
+const NotificationService = require('../service/NotificationService');
+
+const buildMaintenanceCode = async () => {
+    const year = new Date().getFullYear();
+    const last = await Maintenance.findOne({
+        where: { maintenance_code: { [Op.like]: `MT-${year}-%` } },
+        order: [['maintenance_code', 'DESC']]
+    });
+    const next = last ? parseInt(last.maintenance_code.split('-')[2]) + 1 : 1;
+    return `MT-${year}-${String(next).padStart(4, '0')}`;
+};
 
 // GET /api/maintenance - Lấy tất cả maintenance records
 const getAllMaintenance = async (req, res) => {
@@ -349,7 +361,7 @@ const createMaintenance = async (req, res) => {
             return res.status(401).json({ success: false, message: 'Authentication required or provide created_by in request body' });
         }
         const defaultValues = {
-            maintenance_code: `MT-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            maintenance_code: await buildMaintenanceCode(),
             maintenance_type: 'preventive',
             priority: 'medium',
             title: 'Maintenance Task',
@@ -362,10 +374,14 @@ const createMaintenance = async (req, res) => {
         console.log('Default values:', defaultValues);
         console.log('Maintenance data:', maintenanceData);
 
+        // Normalize maintenance_type to match ENUM ('corrective' instead of legacy 'repair')
+        const normalizedType = maintenanceData.maintenance_type === 'repair' ? 'corrective' :
+            (maintenanceData.maintenance_type || 'preventive');
+
         const processedData = {
             // Required fields with defaults
             maintenance_code: maintenanceData.maintenance_code || defaultValues.maintenance_code,
-            maintenance_type: maintenanceData.maintenance_type || defaultValues.maintenance_type,
+            maintenance_type: normalizedType,
             priority: maintenanceData.priority || defaultValues.priority,
             title: maintenanceData.title || defaultValues.title,
             status: maintenanceData.status || defaultValues.status,
@@ -508,6 +524,21 @@ const createMaintenance = async (req, res) => {
             data: createdMaintenance,
             message: 'Maintenance record created successfully'
         });
+
+        // 🆕 Gửi thông báo sau khi tạo thành công
+        try {
+            await NotificationService.onMaintenanceCreated({
+                id: createdMaintenance.id,
+                maintenance_code: createdMaintenance.maintenance_code,
+                title: createdMaintenance.title,
+                asset: createdMaintenance.asset,
+                technician_id: createdMaintenance.technician_id,
+                created_by: createdMaintenance.created_by
+            });
+        } catch (notifError) {
+            console.error('Error sending notification:', notifError);
+            // Không throw error để không ảnh hưởng đến response chính
+        }
     } catch (error) {
         // Rollback only if transaction exists and not finished
         if (transaction && !transaction.finished) {
@@ -536,6 +567,34 @@ const updateMaintenance = async (req, res) => {
         const { id } = req.params;
         const { consumables, checklist, ...updateData } = req.body;
 
+        // 🆕 Lấy maintenance cũ để so sánh technician_id
+        const existingMaintenance = await Maintenance.findByPk(id, {
+            include: [
+                {
+                    model: Assets,
+                    as: 'asset',
+                    attributes: ['id', 'asset_code', 'name']
+                },
+                {
+                    model: User,
+                    as: 'technician',
+                    attributes: ['id', 'name', 'employee_code']
+                }
+            ]
+        });
+
+        if (!existingMaintenance) {
+            if (transaction && !transaction.finished) {
+                await transaction.rollback();
+            }
+            return res.status(404).json({
+                success: false,
+                message: 'Maintenance record not found'
+            });
+        }
+
+        const oldTechnicianId = existingMaintenance.technician_id;
+
         // Set default values for required fields if not provided or null
         if (!updateData.priority || updateData.priority === null || updateData.priority === '') {
             updateData.priority = 'medium';
@@ -550,18 +609,12 @@ const updateMaintenance = async (req, res) => {
             updateData.scheduled_date = new Date();
         }
         if (!updateData.asset_id || updateData.asset_id === null || updateData.asset_id === '') {
-            // If no asset_id provided, try to get from existing record
-            const existingMaintenance = await Maintenance.findByPk(id);
-            if (!existingMaintenance) {
-                if (transaction && !transaction.finished) {
-                    await transaction.rollback();
-                }
-                return res.status(404).json({
-                    success: false,
-                    message: 'Maintenance record not found'
-                });
-            }
             updateData.asset_id = existingMaintenance.asset_id;
+        }
+
+        // Normalize maintenance_type from legacy value
+        if (updateData.maintenance_type === 'repair') {
+            updateData.maintenance_type = 'corrective';
         }
 
         // Exclude maintenance_code from update to prevent unique constraint violation
@@ -718,6 +771,26 @@ const updateMaintenance = async (req, res) => {
             data: updatedMaintenance,
             message: 'Maintenance record updated successfully'
         });
+
+        // 🆕 Gửi thông báo nếu có thay đổi technician
+        try {
+            const newTechnicianId = updatedMaintenance.technician_id;
+            if (newTechnicianId !== oldTechnicianId) {
+                await NotificationService.onMaintenanceAssigned(
+                    {
+                        id: updatedMaintenance.id,
+                        maintenance_code: updatedMaintenance.maintenance_code,
+                        title: updatedMaintenance.title,
+                        asset: updatedMaintenance.asset,
+                        technician_id: newTechnicianId,
+                        created_by: updatedMaintenance.created_by
+                    },
+                    oldTechnicianId
+                );
+            }
+        } catch (notifError) {
+            console.error('Error sending notification:', notifError);
+        }
     } catch (error) {
         // Rollback only if transaction exists and not finished
         if (transaction && !transaction.finished) {
@@ -826,6 +899,19 @@ const approveMaintenance = async (req, res) => {
             data: updatedMaintenance,
             message: 'Phê duyệt lịch bảo trì thành công'
         });
+
+        // Send notification after successful approval
+        try {
+            await NotificationService.onMaintenanceApproved({
+                maintenanceId: updatedMaintenance.id,
+                technicianId: updatedMaintenance.technician_id,
+                assetCode: updatedMaintenance.asset?.asset_code,
+                assetName: updatedMaintenance.asset?.name,
+                approverId: req.user?.id
+            });
+        } catch (notifError) {
+            console.error('Error sending approval notification:', notifError);
+        }
     } catch (error) {
         console.error('Error in approveMaintenance:', error);
         res.status(500).json({
@@ -887,6 +973,20 @@ const rejectMaintenance = async (req, res) => {
             data: updatedMaintenance,
             message: 'Đã từ chối phê duyệt. Lịch bảo trì được chuyển về trạng thái "Đang thực hiện"'
         });
+
+        // Send notification after successful rejection
+        try {
+            await NotificationService.onMaintenanceRejected({
+                maintenanceId: updatedMaintenance.id,
+                technicianId: updatedMaintenance.technician_id,
+                assetCode: updatedMaintenance.asset?.asset_code,
+                assetName: updatedMaintenance.asset?.name,
+                reason,
+                rejectedBy: req.user?.id
+            });
+        } catch (notifError) {
+            console.error('Error sending rejection notification:', notifError);
+        }
     } catch (error) {
         console.error('Error in rejectMaintenance:', error);
         res.status(500).json({
@@ -1054,7 +1154,7 @@ const completeWorkTask = async (req, res) => {
 // GET /api/maintenance/reports/summary - Báo cáo tổng hợp bảo trì
 const getMaintenanceReportSummary = async (req, res) => {
     try {
-        const { period = 'month', startDate, endDate } = req.query;
+        const { period = 'month', startDate, endDate, month, year } = req.query;
         const { Sequelize } = require('sequelize');
         const Op = Sequelize.Op;
 
@@ -1065,6 +1165,19 @@ const getMaintenanceReportSummary = async (req, res) => {
         if (startDate && endDate) {
             currentPeriodStart = new Date(startDate);
             currentPeriodEnd = new Date(endDate);
+        } else if (month && year) {
+            // Lấy theo tháng và năm cụ thể
+            const selectedMonth = parseInt(month);
+            const selectedYear = parseInt(year);
+            
+            currentPeriodStart = new Date(selectedYear, selectedMonth - 1, 1);
+            currentPeriodEnd = new Date(selectedYear, selectedMonth, 0);
+            currentPeriodEnd.setHours(23, 59, 59, 999);
+            
+            // Tháng trước
+            previousPeriodStart = new Date(selectedYear, selectedMonth - 2, 1);
+            previousPeriodEnd = new Date(selectedYear, selectedMonth - 1, 0);
+            previousPeriodEnd.setHours(23, 59, 59, 999);
         } else if (period === 'week') {
             // Tuần hiện tại
             currentPeriodEnd = new Date();
@@ -1076,13 +1189,16 @@ const getMaintenanceReportSummary = async (req, res) => {
             previousPeriodStart = new Date(previousPeriodEnd);
             previousPeriodStart.setDate(previousPeriodStart.getDate() - 7);
         } else {
-            // Tháng hiện tại
-            currentPeriodEnd = new Date();
-            currentPeriodStart = new Date(currentPeriodEnd.getFullYear(), currentPeriodEnd.getMonth(), 1);
+            // Tháng hiện tại - lấy cả tháng từ đầu đến cuối
+            const now = new Date();
+            currentPeriodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+            currentPeriodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0); // Ngày cuối cùng của tháng
+            currentPeriodEnd.setHours(23, 59, 59, 999);
             
             // Tháng trước
-            previousPeriodEnd = new Date(currentPeriodStart);
-            previousPeriodStart = new Date(previousPeriodEnd.getFullYear(), previousPeriodEnd.getMonth() - 1, 1);
+            previousPeriodStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            previousPeriodEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+            previousPeriodEnd.setHours(23, 59, 59, 999);
         }
 
         // Lấy dữ liệu kỳ hiện tại
@@ -1108,6 +1224,8 @@ const getMaintenanceReportSummary = async (req, res) => {
             }
         });
 
+        const isCorrective = (type) => type === 'corrective' || type === 'repair';
+
         // Thống kê kỳ hiện tại
         const currentStats = {
             total: currentPeriodData.length,
@@ -1118,7 +1236,7 @@ const getMaintenanceReportSummary = async (req, res) => {
             cleaning: currentPeriodData.filter(m => m.maintenance_type === 'cleaning').length,
             inspection: currentPeriodData.filter(m => m.maintenance_type === 'inspection').length,
             maintenance: currentPeriodData.filter(m => m.maintenance_type === 'maintenance').length,
-            repair: currentPeriodData.filter(m => m.maintenance_type === 'repair').length,
+            corrective: currentPeriodData.filter(m => isCorrective(m.maintenance_type)).length,
             totalCost: currentPeriodData.reduce((sum, m) => sum + (parseFloat(m.cost) || 0), 0),
             completionRate: currentPeriodData.length > 0 
                 ? (currentPeriodData.filter(m => m.status === 'completed').length / currentPeriodData.length * 100).toFixed(2)
@@ -1156,12 +1274,13 @@ const getMaintenanceReportSummary = async (req, res) => {
                         cleaning: 0,
                         inspection: 0,
                         maintenance: 0,
-                        repair: 0
+                        corrective: 0
                     };
                 }
                 assetStats[assetName].total++;
                 if (m.maintenance_type) {
-                    assetStats[assetName][m.maintenance_type] = (assetStats[assetName][m.maintenance_type] || 0) + 1;
+                    const normalizedType = isCorrective(m.maintenance_type) ? 'corrective' : m.maintenance_type;
+                    assetStats[assetName][normalizedType] = (assetStats[assetName][normalizedType] || 0) + 1;
                 }
             }
         });
@@ -1226,7 +1345,7 @@ const getMonthlyMaintenanceReport = async (req, res) => {
                 cleaning: data.filter(m => m.maintenance_type === 'cleaning').length,
                 inspection: data.filter(m => m.maintenance_type === 'inspection').length,
                 maintenance: data.filter(m => m.maintenance_type === 'maintenance').length,
-                repair: data.filter(m => m.maintenance_type === 'repair').length,
+                corrective: data.filter(m => m.maintenance_type === 'corrective').length,
                 totalCost: data.reduce((sum, m) => sum + (parseFloat(m.cost) || 0), 0)
             });
         }
@@ -1274,11 +1393,35 @@ const startMaintenance = async (req, res) => {
             actual_start_date: new Date()
         });
 
+        // Fetch updated maintenance with relations for notification
+        const updatedMaintenance = await Maintenance.findByPk(id, {
+            include: [
+                {
+                    model: Assets,
+                    as: 'asset',
+                    attributes: ['id', 'asset_code', 'name']
+                }
+            ]
+        });
+
         res.status(200).json({
             success: true,
             message: 'Đã bắt đầu lệnh bảo trì',
-            data: maintenance
+            data: updatedMaintenance
         });
+
+        // Send notification after successful start
+        try {
+            await NotificationService.onMaintenanceStarted({
+                maintenanceId: updatedMaintenance.id,
+                technicianId: updatedMaintenance.technician_id,
+                assetCode: updatedMaintenance.asset?.asset_code,
+                assetName: updatedMaintenance.asset?.name,
+                startDate: updatedMaintenance.actual_start_date
+            });
+        } catch (notifError) {
+            console.error('Error sending start notification:', notifError);
+        }
     } catch (error) {
         console.error('Error starting maintenance:', error);
         res.status(500).json({
@@ -1363,5 +1506,6 @@ module.exports = {
     startMaintenance,
     saveMaintenanceProgress,
     getMaintenanceReportSummary,
-    getMonthlyMaintenanceReport
+    getMonthlyMaintenanceReport,
+    buildMaintenanceCode
 };

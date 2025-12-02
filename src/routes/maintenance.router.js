@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const authMiddleware = require('../middleware/authMiddleware');
+const departmentGuard = require('../middleware/departmentGuard');
 const {
     getAllMaintenance,
     getMaintenanceById,
@@ -22,8 +24,9 @@ const {
     getMonthlyMaintenanceReport
 } = require('../controllers/maintenance.controllers');
 
-// CRUD routes
-router.get('/', getAllMaintenance);
+router.use(authMiddleware);
+
+// Public routes (không cần department guard)
 router.get('/reports/summary', getMaintenanceReportSummary);    // Báo cáo tổng hợp
 router.get('/reports/monthly', getMonthlyMaintenanceReport);    // Báo cáo theo tháng
 router.get('/my-work', getMyMaintenanceWork);                  // Công việc của user hiện tại
@@ -32,6 +35,12 @@ router.get('/by-asset/:assetId', getMaintenanceByAsset);        // Đặt trư�
 router.get('/by-status/:status', getMaintenanceByStatus);       // Đặt trước /:id để tránh conflict
 router.get('/by-technician/:technicianId', getMaintenanceByTechnician); // Đặt trước /:id để tránh conflict
 router.get('/:id', getMaintenanceById);
+router.get('/', getAllMaintenance);
+
+// Protected routes (cần xưởng cơ điện)
+router.use(departmentGuard(['xưởng cơ điện']));
+
+// CRUD routes
 router.post('/', createMaintenance);
 router.put('/:id', updateMaintenance);
 router.delete('/:id', deleteMaintenance);

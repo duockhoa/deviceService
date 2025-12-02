@@ -4,9 +4,11 @@ const {
     MaintenanceProgress, 
     MaintenanceImages,
     Assets, 
-    User 
+    User,
+    MaintenanceWorkTask
 } = require('../models');
 const { Op } = require('sequelize');
+const NotificationService = require('../service/NotificationService');
 
 // GET /api/maintenance-work/my-tasks - Lấy danh sách WO được giao cho user đăng nhập
 const getMyWorkOrders = async (req, res) => {
@@ -131,6 +133,12 @@ const getWorkOrderById = async (req, res) => {
                         attributes: ['id', 'name']
                     }]
                 }
+                ,{
+                    model: MaintenanceWorkTask,
+                    as: 'workTasks',
+                    attributes: ['id','task_name','task_type','description','assigned_to','estimated_hours','actual_hours','status','priority','work_report','issues_found','materials_used','started_at','completed_at','completed_by','image_before','image_after','order_index'],
+                    order: [['order_index', 'ASC']]
+                }
             ]
         });
 
@@ -141,9 +149,41 @@ const getWorkOrderById = async (req, res) => {
             });
         }
 
+        // Convert to plain object and map assigned_to IDs to user names for workTasks
+        const workOrderData = workOrder.toJSON();
+        if (workOrderData.workTasks && workOrderData.workTasks.length > 0) {
+            const userIds = new Set();
+            workOrderData.workTasks.forEach(task => {
+                try {
+                    const assignedTo = typeof task.assigned_to === 'string' ? JSON.parse(task.assigned_to) : task.assigned_to;
+                    if (Array.isArray(assignedTo)) {
+                        assignedTo.forEach(id => userIds.add(id));
+                    }
+                } catch (err) {
+                    // ignore parse errors
+                }
+            });
+
+            if (userIds.size > 0) {
+                const users = await User.findAll({ where: { id: Array.from(userIds) }, attributes: ['id', 'name'] });
+                const userMap = {};
+                users.forEach(u => { userMap[u.id] = u.name; });
+
+                workOrderData.workTasks = workOrderData.workTasks.map(task => {
+                    const assignedTo = typeof task.assigned_to === 'string' ? JSON.parse(task.assigned_to) : task.assigned_to;
+                    const assignedNames = Array.isArray(assignedTo) ? assignedTo.map(id => userMap[id] || 'Unknown').join(', ') : '';
+                    return {
+                        ...task,
+                        assigned_to: assignedTo,
+                        assigned_to_name: assignedNames
+                    };
+                });
+            }
+        }
+
         res.status(200).json({
             success: true,
-            data: workOrder
+            data: workOrderData
         });
     } catch (error) {
         console.error('Error fetching work order:', error);
@@ -385,11 +425,35 @@ const completeWork = async (req, res) => {
             notes: final_notes || maintenance.notes
         });
 
+        // Fetch updated maintenance with asset info
+        const updatedMaintenance = await Maintenance.findByPk(id, {
+            include: [
+                {
+                    model: Assets,
+                    as: 'asset',
+                    attributes: ['id', 'asset_code', 'name']
+                }
+            ]
+        });
+
         res.status(200).json({
             success: true,
-            data: maintenance,
+            data: updatedMaintenance,
             message: 'Đã hoàn thành công việc. Chờ trưởng bộ phận duyệt.'
         });
+
+        // Send notification after successful completion
+        try {
+            await NotificationService.onMaintenanceCompleted({
+                maintenanceId: updatedMaintenance.id,
+                technicianId: updatedMaintenance.technician_id,
+                assetCode: updatedMaintenance.asset?.asset_code,
+                assetName: updatedMaintenance.asset?.name,
+                createdBy: updatedMaintenance.created_by
+            });
+        } catch (notifError) {
+            console.error('Error sending completion notification:', notifError);
+        }
     } catch (error) {
         console.error('Error completing work:', error);
         res.status(500).json({

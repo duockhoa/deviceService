@@ -1,4 +1,5 @@
 const { Calibration, Assets, User } = require('../models');
+const NotificationService = require('../service/NotificationService');
 
 // GET /api/calibration - Lấy tất cả calibration records
 const getAllCalibrations = async (req, res) => {
@@ -157,14 +158,37 @@ const createCalibration = async (req, res) => {
 
         const calibration = await Calibration.create(calibrationData);
 
-        // Fetch the created calibration
-        const createdCalibration = await Calibration.findByPk(calibration.id);
+        // Fetch the created calibration with relations
+        const createdCalibration = await Calibration.findByPk(calibration.id, {
+            include: [
+                {
+                    model: Assets,
+                    as: 'asset',
+                    attributes: ['id', 'asset_code', 'name']
+                }
+            ]
+        });
 
         res.status(201).json({
             success: true,
             data: createdCalibration,
             message: 'Calibration record created successfully'
         });
+
+        // Send notification after successful creation
+        try {
+            await NotificationService.onCalibrationCreated({
+                calibrationId: createdCalibration.id,
+                calibrationCode: createdCalibration.calibration_code,
+                assetCode: createdCalibration.asset?.asset_code,
+                assetName: createdCalibration.asset?.name,
+                technicianId: createdCalibration.technician_id,
+                scheduledDate: createdCalibration.scheduled_date,
+                createdBy: createdCalibration.created_by
+            });
+        } catch (notifError) {
+            console.error('Error sending calibration creation notification:', notifError);
+        }
     } catch (error) {
         console.error('Error in createCalibration:', error);
         res.status(500).json({
@@ -180,6 +204,16 @@ const updateCalibration = async (req, res) => {
     try {
         const { id } = req.params;
         const updateData = { ...req.body };
+
+        // Fetch existing calibration to detect technician changes
+        const existingCalibration = await Calibration.findByPk(id);
+        if (!existingCalibration) {
+            return res.status(404).json({
+                success: false,
+                message: 'Calibration record not found'
+            });
+        }
+        const oldTechnicianId = existingCalibration.technician_id;
 
         // Exclude calibration_code from update to prevent unique constraint violation
         delete updateData.calibration_code;
@@ -232,6 +266,39 @@ const updateCalibration = async (req, res) => {
             data: updatedCalibration,
             message: 'Calibration record updated successfully'
         });
+
+        // Send notification if technician changed or status completed
+        try {
+            const newTechnicianId = updatedCalibration.technician_id;
+            
+            // Technician assignment notification
+            if (newTechnicianId && newTechnicianId !== oldTechnicianId) {
+                await NotificationService.onCalibrationAssigned({
+                    calibrationId: updatedCalibration.id,
+                    calibrationCode: updatedCalibration.calibration_code,
+                    assetCode: updatedCalibration.asset?.asset_code,
+                    assetName: updatedCalibration.asset?.name,
+                    technicianId: newTechnicianId,
+                    oldTechnicianId: oldTechnicianId,
+                    scheduledDate: updatedCalibration.scheduled_date
+                });
+            }
+
+            // Completion notification
+            if (updateData.status === 'completed' && existingCalibration.status !== 'completed') {
+                await NotificationService.onCalibrationCompleted({
+                    calibrationId: updatedCalibration.id,
+                    calibrationCode: updatedCalibration.calibration_code,
+                    assetCode: updatedCalibration.asset?.asset_code,
+                    assetName: updatedCalibration.asset?.name,
+                    technicianId: updatedCalibration.technician_id,
+                    result: updatedCalibration.result,
+                    createdBy: updatedCalibration.created_by
+                });
+            }
+        } catch (notifError) {
+            console.error('Error sending calibration update notification:', notifError);
+        }
     } catch (error) {
         res.status(500).json({
             success: false,

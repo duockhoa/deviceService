@@ -21,9 +21,32 @@ const { MaintenanceWorkTask } = require('./maintenanceWorkTask.model');
 const { MaintenanceProgress } = require('./maintenanceProgress.model');
 const { MaintenanceImages } = require('./maintenanceImages.model');
 const MaintenanceAttachments = require('./maintenanceAttachments.model');
+const { MaintenancePlan } = require('./maintenancePlan.model');
+const { MaintenancePlanBatch } = require('./maintenancePlanBatch.model');
+const { MaintenancePlanItem } = require('./maintenancePlanItem.model');
+const { WorkRequest } = require('./workRequest.model');
+const { WorkRequestProgress } = require('./workRequestProgress.model');
 
 // Import Calibration
 const { Calibration } = require('./calibration.model');
+
+// Import Handover models
+const Handover = require('./handover.model');
+const HandoverFollowUp = require('./handoverFollowUp.model');
+const Incidents = require('./incidents.model');
+
+// Import Notification
+const { Notification } = require('./notification.model');
+
+// Import Checklist Template models
+const { MaintenanceChecklistTemplate } = require('./maintenanceChecklistTemplate.model');
+const { MaintenanceChecklistTemplateItem } = require('./maintenanceChecklistTemplateItem.model');
+
+// Import RBAC models
+const { Role } = require('./role.model');
+const { Permission } = require('./permission.model');
+const { RolePermission } = require('./rolePermission.model');
+const { UserRole } = require('./userRole.model');
 
 // ================== EXISTING ASSOCIATIONS ==================
 // Define associations
@@ -117,6 +140,31 @@ User.hasMany(AssetAttachment, {
     sourceKey: 'id',
     as: 'UploadedAttachments'
 });
+
+// MaintenancePlan associations
+MaintenancePlan.belongsTo(Assets, { foreignKey: 'asset_id', as: 'asset' });
+Assets.hasMany(MaintenancePlan, { foreignKey: 'asset_id', as: 'maintenancePlans' });
+MaintenancePlan.belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
+User.hasMany(MaintenancePlan, { foreignKey: 'created_by', as: 'createdMaintenancePlans' });
+MaintenancePlan.belongsTo(User, { foreignKey: 'approved_by', as: 'approver' });
+User.hasMany(MaintenancePlan, { foreignKey: 'approved_by', as: 'approvedMaintenancePlans' });
+
+// Plan batch & items associations
+MaintenancePlanBatch.belongsTo(User, { foreignKey: 'created_by', as: 'batchCreator' });
+MaintenancePlanBatch.belongsTo(User, { foreignKey: 'approved_by', as: 'batchApprover' });
+MaintenancePlanBatch.hasMany(MaintenancePlanItem, { foreignKey: 'batch_id', as: 'items' });
+MaintenancePlanItem.belongsTo(MaintenancePlanBatch, { foreignKey: 'batch_id', as: 'batch' });
+MaintenancePlanItem.belongsTo(Assets, { foreignKey: 'asset_id', as: 'asset' });
+Assets.hasMany(MaintenancePlanItem, { foreignKey: 'asset_id', as: 'planItems' });
+
+// Work requests associations
+WorkRequest.belongsTo(Assets, { foreignKey: 'asset_id', as: 'asset' });
+Assets.hasMany(WorkRequest, { foreignKey: 'asset_id', as: 'workRequests' });
+WorkRequest.belongsTo(User, { foreignKey: 'requester_id', as: 'requester' });
+WorkRequest.belongsTo(User, { foreignKey: 'technician_id', as: 'technician' });
+WorkRequest.hasMany(WorkRequestProgress, { foreignKey: 'work_request_id', as: 'progress' });
+WorkRequestProgress.belongsTo(WorkRequest, { foreignKey: 'work_request_id', as: 'workRequest' });
+WorkRequestProgress.belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
 
 // Plants - Areas associations
 Areas.belongsTo(Plants, {
@@ -354,7 +402,22 @@ module.exports = {
     MaintenanceProgress,
     MaintenanceImages,
     MaintenanceAttachments,
-    Calibration
+    MaintenancePlan,
+    MaintenancePlanBatch,
+    MaintenancePlanItem,
+    WorkRequest,
+    WorkRequestProgress,
+    Calibration,
+    Incidents,
+    Notification,
+    Handover,
+    HandoverFollowUp,
+    MaintenanceChecklistTemplate,
+    MaintenanceChecklistTemplateItem,
+    Role,
+    Permission,
+    RolePermission,
+    UserRole
 };
 
 // ================== MAINTENANCE ASSOCIATIONS ==================
@@ -556,6 +619,40 @@ AssetConsumables.hasMany(MaintenanceConsumables, {
     as: 'maintenanceUsage'
 });
 
+// ================== INCIDENTS ASSOCIATIONS ==================
+Incidents.belongsTo(Assets, {
+    foreignKey: 'asset_id',
+    targetKey: 'id',
+    as: 'asset'
+});
+Assets.hasMany(Incidents, {
+    foreignKey: 'asset_id',
+    sourceKey: 'id',
+    as: 'incidents'
+});
+
+Incidents.belongsTo(User, {
+    foreignKey: 'reported_by',
+    targetKey: 'id',
+    as: 'reporter'
+});
+User.hasMany(Incidents, {
+    foreignKey: 'reported_by',
+    sourceKey: 'id',
+    as: 'reported_incidents'
+});
+
+Incidents.belongsTo(User, {
+    foreignKey: 'assigned_to',
+    targetKey: 'id',
+    as: 'assignee'
+});
+User.hasMany(Incidents, {
+    foreignKey: 'assigned_to',
+    sourceKey: 'id',
+    as: 'assigned_incidents'
+});
+
 // ================== MAINTENANCE ATTACHMENTS ASSOCIATIONS ==================
 // MaintenanceAttachments - Maintenance associations
 MaintenanceAttachments.belongsTo(Maintenance, {
@@ -579,4 +676,132 @@ User.hasMany(MaintenanceAttachments, {
     foreignKey: 'uploaded_by',
     sourceKey: 'id',
     as: 'uploaded_attachments'
+});
+
+// ================== NOTIFICATION ASSOCIATIONS ==================
+// Notification - User associations (sender)
+Notification.belongsTo(User, {
+    foreignKey: 'sender_id',
+    targetKey: 'id',
+    as: 'sender'
+});
+User.hasMany(Notification, {
+    foreignKey: 'sender_id',
+    sourceKey: 'id',
+    as: 'sent_notifications'
+});
+
+// ================== HANDOVER ASSOCIATIONS ==================
+// Handover - Asset
+Handover.belongsTo(Assets, {
+    foreignKey: 'asset_id',
+    targetKey: 'id',
+    as: 'asset'
+});
+
+// Handover - User (creator)
+Handover.belongsTo(User, {
+    foreignKey: 'created_by',
+    targetKey: 'id',
+    as: 'creator'
+});
+
+// Handover - User (accepted_by)
+Handover.belongsTo(User, {
+    foreignKey: 'accepted_by',
+    targetKey: 'id',
+    as: 'acceptedBy'
+});
+
+// Handover - HandoverFollowUp
+Handover.hasMany(HandoverFollowUp, {
+    foreignKey: 'handover_id',
+    sourceKey: 'id',
+    as: 'followUps'
+});
+HandoverFollowUp.belongsTo(Handover, {
+    foreignKey: 'handover_id',
+    targetKey: 'id',
+    as: 'handover'
+});
+
+// HandoverFollowUp - User (creator)
+HandoverFollowUp.belongsTo(User, {
+    foreignKey: 'created_by',
+    targetKey: 'id',
+    as: 'creator'
+});
+
+// ================== MAINTENANCE CHECKLIST TEMPLATE ASSOCIATIONS ==================
+// MaintenanceChecklistTemplate - User (creator)
+MaintenanceChecklistTemplate.belongsTo(User, {
+    foreignKey: 'created_by',
+    targetKey: 'id',
+    as: 'creator'
+});
+User.hasMany(MaintenanceChecklistTemplate, {
+    foreignKey: 'created_by',
+    sourceKey: 'id',
+    as: 'created_checklist_templates'
+});
+
+// MaintenanceChecklistTemplate - MaintenanceChecklistTemplateItem
+MaintenanceChecklistTemplate.hasMany(MaintenanceChecklistTemplateItem, {
+    foreignKey: 'template_id',
+    sourceKey: 'id',
+    as: 'items',
+    onDelete: 'CASCADE'
+});
+MaintenanceChecklistTemplateItem.belongsTo(MaintenanceChecklistTemplate, {
+    foreignKey: 'template_id',
+    targetKey: 'id',
+    as: 'template'
+});
+
+// ================== RBAC ASSOCIATIONS ==================
+// Role - User (creator)
+Role.belongsTo(User, {
+    foreignKey: 'created_by',
+    targetKey: 'id',
+    as: 'creator'
+});
+User.hasMany(Role, {
+    foreignKey: 'created_by',
+    sourceKey: 'id',
+    as: 'created_roles'
+});
+
+// Role - Permission (Many-to-Many through RolePermission)
+Role.belongsToMany(Permission, {
+    through: RolePermission,
+    foreignKey: 'role_id',
+    otherKey: 'permission_id',
+    as: 'permissions'
+});
+Permission.belongsToMany(Role, {
+    through: RolePermission,
+    foreignKey: 'permission_id',
+    otherKey: 'role_id',
+    as: 'roles'
+});
+
+// User - Role (Many-to-Many through UserRole)
+User.belongsToMany(Role, {
+    through: UserRole,
+    foreignKey: 'user_id',
+    otherKey: 'role_id',
+    as: 'roles'
+});
+Role.belongsToMany(User, {
+    through: UserRole,
+    foreignKey: 'role_id',
+    otherKey: 'user_id',
+    as: 'users'
+});
+
+// UserRole - User (assigned_by)
+UserRole.belongsTo(User, {
+    foreignKey: 'assigned_by',
+    targetKey: 'id',
+    as: 'assigner'
 });
