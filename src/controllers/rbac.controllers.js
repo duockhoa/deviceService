@@ -508,6 +508,72 @@ const getUserPermissions = async (req, res) => {
     }
 };
 
+// GET /api/v1/rbac/me/permissions - Lấy permissions của user hiện tại (đang đăng nhập)
+const getMyPermissions = async (req, res) => {
+    try {
+        const userId = req.user?.id;
+
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                message: 'Người dùng chưa đăng nhập'
+            });
+        }
+
+        const user = await User.findByPk(userId, {
+            include: [{
+                model: Role,
+                as: 'roles',
+                where: { is_active: true },
+                required: false,
+                through: { attributes: [] },
+                include: [{
+                    model: Permission,
+                    as: 'permissions',
+                    where: { is_active: true },
+                    required: false,
+                    through: { attributes: [] }
+                }]
+            }]
+        });
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'Không tìm thấy người dùng'
+            });
+        }
+
+        // Flatten permissions và return permission_keys
+        const permissionMap = new Map();
+        const permissionKeys = new Set();
+        
+        (user.roles || []).forEach(role => {
+            (role.permissions || []).forEach(permission => {
+                permissionMap.set(permission.id, permission);
+                permissionKeys.add(permission.permission_key);
+            });
+        });
+
+        const permissions = Array.from(permissionMap.values());
+
+        res.status(200).json({
+            success: true,
+            data: {
+                permissions,
+                permission_keys: Array.from(permissionKeys)
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching my permissions:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Lỗi khi lấy quyền của bạn',
+            error: error.message
+        });
+    }
+};
+
 // POST /api/v1/rbac/seed - Seed default roles & permissions
 const seedRBAC = async (req, res) => {
     const transaction = await Role.sequelize.transaction();
@@ -669,5 +735,6 @@ module.exports = {
     getUserRoles,
     assignUserRoles,
     getUserPermissions,
+    getMyPermissions,
     seedRBAC
 };

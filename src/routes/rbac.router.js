@@ -11,6 +11,7 @@ const {
     getUserRoles,
     assignUserRoles,
     getUserPermissions,
+    getMyPermissions,
     seedRBAC
 } = require('../controllers/rbac.controllers');
 const authMiddleware = require('../middleware/authMiddleware');
@@ -33,6 +34,9 @@ router.post('/permissions', createPermission);
 
 // ==================== USERS ====================
 router.get('/users', getAllUsers);
+
+// ==================== MY PERMISSIONS ====================
+router.get('/me/permissions', getMyPermissions);
 
 // ==================== USER ROLES ====================
 router.get('/users/:userId/roles', getUserRoles);
