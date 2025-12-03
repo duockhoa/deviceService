@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middleware/authMiddleware');
-const departmentGuard = require('../middleware/departmentGuard');
+const { permissionGuard } = require('../middleware/permissionGuard');
 const {
     getAllCalibrations,
     getCalibrationById,
@@ -14,16 +14,15 @@ const {
 } = require('../controllers/calibration.controllers');
 
 router.use(authMiddleware);
-router.use(departmentGuard(['xưởng cơ điện']));
 
 // CRUD routes
-router.get('/', getAllCalibrations);
-router.get('/by-asset/:assetId', getCalibrationsByAsset);
-router.get('/by-status/:status', getCalibrationsByStatus);
-router.get('/by-technician/:technicianId', getCalibrationsByTechnician);
-router.get('/:id', getCalibrationById);
-router.post('/', createCalibration);
-router.put('/:id', updateCalibration);
-router.delete('/:id', deleteCalibration);
+router.get('/', permissionGuard('calibration.view'), getAllCalibrations);
+router.get('/by-asset/:assetId', permissionGuard('calibration.view'), getCalibrationsByAsset);
+router.get('/by-status/:status', permissionGuard('calibration.view'), getCalibrationsByStatus);
+router.get('/by-technician/:technicianId', permissionGuard('calibration.view'), getCalibrationsByTechnician);
+router.get('/:id', permissionGuard('calibration.view'), getCalibrationById);
+router.post('/', permissionGuard('calibration.create'), createCalibration);
+router.put('/:id', permissionGuard('calibration.update'), updateCalibration);
+router.delete('/:id', permissionGuard('calibration.update'), deleteCalibration);
 
 module.exports = router;

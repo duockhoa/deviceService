@@ -3,7 +3,7 @@ const multer = require('multer');
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 const authMiddleware = require('../middleware/authMiddleware');
-const departmentGuard = require('../middleware/departmentGuard');
+const { permissionGuard } = require('../middleware/permissionGuard');
 
 const {
     generateTemplate,
@@ -19,27 +19,26 @@ const {
 // Tải file Excel mẫu (PUBLIC - không cần auth)
 router.get('/template', generateTemplate);
 
-// Các route sau cần authentication và department guard
+// Các route sau cần authentication
 router.use(authMiddleware);
-router.use(departmentGuard(['xưởng cơ điện']));
 
 // Import và xem trước danh sách kế hoạch
-router.post('/import', upload.single('file'), importPreview);
+router.post('/import', upload.single('file'), permissionGuard('maintenance_plan.create'), importPreview);
 
 // Lưu kế hoạch (batch) pending
-router.post('/save', saveBatch);
+router.post('/save', permissionGuard('maintenance_plan.create'), saveBatch);
 
 // Danh sách kế hoạch tổng
-router.get('/', listBatches);
+router.get('/', permissionGuard('maintenance_plan.view'), listBatches);
 
 // Chi tiết batch
-router.get('/:id', getBatchDetail);
+router.get('/:id', permissionGuard('maintenance_plan.view'), getBatchDetail);
 
 // Phê duyệt item trong batch
-router.post('/:batchId/approve', approveBatchItems);
+router.post('/:batchId/approve', permissionGuard('maintenance_plan.approve'), approveBatchItems);
 // Từ chối item trong batch
-router.post('/:batchId/reject', rejectBatchItems);
+router.post('/:batchId/reject', permissionGuard('maintenance_plan.approve'), rejectBatchItems);
 // Xóa batch
-router.delete('/:id', deleteBatch);
+router.delete('/:id', permissionGuard('maintenance_plan.delete'), deleteBatch);
 
 module.exports = router;

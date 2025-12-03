@@ -593,6 +593,17 @@ const seedRBAC = async (req, res) => {
             { permission_key: 'maintenance.approve', permission_name: 'Phê duyệt bảo trì', module: 'maintenance' },
             { permission_key: 'maintenance.report', permission_name: 'Xem báo cáo bảo trì', module: 'maintenance' },
             
+            // Maintenance Plan
+            { permission_key: 'maintenance_plan.view', permission_name: 'Xem kế hoạch bảo trì', module: 'maintenance_plan' },
+            { permission_key: 'maintenance_plan.create', permission_name: 'Tạo kế hoạch bảo trì', module: 'maintenance_plan' },
+            { permission_key: 'maintenance_plan.approve', permission_name: 'Phê duyệt kế hoạch', module: 'maintenance_plan' },
+            { permission_key: 'maintenance_plan.delete', permission_name: 'Xóa kế hoạch', module: 'maintenance_plan' },
+            
+            // Maintenance Work
+            { permission_key: 'maintenance_work.view', permission_name: 'Xem công việc bảo trì', module: 'maintenance_work' },
+            { permission_key: 'maintenance_work.update', permission_name: 'Cập nhật công việc', module: 'maintenance_work' },
+            { permission_key: 'maintenance_work.approve', permission_name: 'Phê duyệt công việc', module: 'maintenance_work' },
+            
             // Calibration
             { permission_key: 'calibration.view', permission_name: 'Xem hiệu chuẩn', module: 'calibration' },
             { permission_key: 'calibration.create', permission_name: 'Tạo lịch hiệu chuẩn', module: 'calibration' },
@@ -619,6 +630,21 @@ const seedRBAC = async (req, res) => {
             { permission_key: 'incidents.create', permission_name: 'Báo cáo sự cố', module: 'incidents' },
             { permission_key: 'incidents.update', permission_name: 'Cập nhật sự cố', module: 'incidents' },
             { permission_key: 'incidents.resolve', permission_name: 'Xử lý sự cố', module: 'incidents' },
+            
+            // Categories
+            { permission_key: 'categories.view', permission_name: 'Xem danh mục', module: 'categories' },
+            { permission_key: 'categories.manage', permission_name: 'Quản lý danh mục', module: 'categories' },
+            
+            // Areas & Plants
+            { permission_key: 'location.view', permission_name: 'Xem khu vực/nhà máy', module: 'location' },
+            { permission_key: 'location.manage', permission_name: 'Quản lý khu vực/nhà máy', module: 'location' },
+            
+            // Departments
+            { permission_key: 'departments.view', permission_name: 'Xem phòng ban', module: 'departments' },
+            
+            // Notifications
+            { permission_key: 'notifications.view', permission_name: 'Xem thông báo', module: 'notifications' },
+            { permission_key: 'notifications.manage', permission_name: 'Quản lý thông báo', module: 'notifications' },
             
             // Dashboard
             { permission_key: 'dashboard.view', permission_name: 'Xem dashboard', module: 'dashboard' },
@@ -738,3 +764,4 @@ module.exports = {
     getMyPermissions,
     seedRBAC
 };
+

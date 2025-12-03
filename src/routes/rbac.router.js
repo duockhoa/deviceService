@@ -16,11 +16,10 @@ const {
 } = require('../controllers/rbac.controllers');
 const authMiddleware = require('../middleware/authMiddleware');
 
+// Seed route đã được đặt ở index.js (public, không cần auth)
+
 // Apply authentication to all routes
 router.use(authMiddleware);
-
-// ==================== SEED ====================
-router.post('/seed', seedRBAC);
 
 // ==================== ROLES ====================
 router.get('/roles', getAllRoles);

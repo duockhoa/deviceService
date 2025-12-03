@@ -3,6 +3,13 @@ const express = require('express')
 const app = express()
 const port = process.env.PORT || 3009
 const path = require('path')
+
+// Import RBAC models để Sequelize tạo bảng
+require('./models/role.model');
+require('./models/permission.model');
+require('./models/rolePermission.model');
+require('./models/userRole.model');
+
 require('./jobs');
 
 // cookie-parser

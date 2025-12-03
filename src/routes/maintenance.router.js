@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middleware/authMiddleware');
-const departmentGuard = require('../middleware/departmentGuard');
+const { permissionGuard } = require('../middleware/permissionGuard');
 const {
     getAllMaintenance,
     getMaintenanceById,
@@ -26,34 +26,31 @@ const {
 
 router.use(authMiddleware);
 
-// Public routes (không cần department guard)
-router.get('/reports/summary', getMaintenanceReportSummary);    // Báo cáo tổng hợp
-router.get('/reports/monthly', getMonthlyMaintenanceReport);    // Báo cáo theo tháng
-router.get('/my-work', getMyMaintenanceWork);                  // Công việc của user hiện tại
-router.get('/results', getMaintenanceResults);                 // Kết quả bảo trì (quản lý)
-router.get('/by-asset/:assetId', getMaintenanceByAsset);        // Đặt trước /:id để tránh conflict
-router.get('/by-status/:status', getMaintenanceByStatus);       // Đặt trước /:id để tránh conflict
-router.get('/by-technician/:technicianId', getMaintenanceByTechnician); // Đặt trước /:id để tránh conflict
-router.get('/:id', getMaintenanceById);
-router.get('/', getAllMaintenance);
-
-// Protected routes (cần xưởng cơ điện)
-router.use(departmentGuard(['xưởng cơ điện']));
+// Public routes
+router.get('/reports/summary', permissionGuard('maintenance.report'), getMaintenanceReportSummary);
+router.get('/reports/monthly', permissionGuard('maintenance.report'), getMonthlyMaintenanceReport);
+router.get('/my-work', permissionGuard('maintenance.view'), getMyMaintenanceWork);
+router.get('/results', permissionGuard('maintenance.report'), getMaintenanceResults);
+router.get('/by-asset/:assetId', permissionGuard('maintenance.view'), getMaintenanceByAsset);
+router.get('/by-status/:status', permissionGuard('maintenance.view'), getMaintenanceByStatus);
+router.get('/by-technician/:technicianId', permissionGuard('maintenance.view'), getMaintenanceByTechnician);
+router.get('/:id', permissionGuard('maintenance.view'), getMaintenanceById);
+router.get('/', permissionGuard('maintenance.view'), getAllMaintenance);
 
 // CRUD routes
-router.post('/', createMaintenance);
-router.put('/:id', updateMaintenance);
-router.delete('/:id', deleteMaintenance);
+router.post('/', permissionGuard('maintenance.create'), createMaintenance);
+router.put('/:id', permissionGuard('maintenance.update'), updateMaintenance);
+router.delete('/:id', permissionGuard('maintenance.update'), deleteMaintenance);
 
-// Approval routes - Phải đặt sau các route by-* và trước /:id
-router.post('/:id/approve', approveMaintenance);
-router.post('/:id/reject', rejectMaintenance);
-router.post('/:id/start', startMaintenance);
-router.put('/:id/save-progress', saveMaintenanceProgress);
+// Approval routes
+router.post('/:id/approve', permissionGuard('maintenance.approve'), approveMaintenance);
+router.post('/:id/reject', permissionGuard('maintenance.approve'), rejectMaintenance);
+router.post('/:id/start', permissionGuard('maintenance.update'), startMaintenance);
+router.put('/:id/save-progress', permissionGuard('maintenance.update'), saveMaintenanceProgress);
 
 // Work task routes
-router.post('/:maintenanceId/work-tasks/:taskId/start', startWorkTask);
-router.post('/:maintenanceId/work-tasks/:taskId/complete', completeWorkTask);
-router.put('/:maintenanceId/work-tasks/:taskId', updateWorkTaskReport);
+router.post('/:maintenanceId/work-tasks/:taskId/start', permissionGuard('maintenance.update'), startWorkTask);
+router.post('/:maintenanceId/work-tasks/:taskId/complete', permissionGuard('maintenance.update'), completeWorkTask);
+router.put('/:maintenanceId/work-tasks/:taskId', permissionGuard('maintenance.update'), updateWorkTaskReport);
 
 module.exports = router;
