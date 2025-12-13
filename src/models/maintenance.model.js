@@ -34,10 +34,10 @@ const Maintenance = sequelize.define('maintenance', {
         comment: 'Mức độ ưu tiên của công việc bảo trì'
     },
     status: {
-        type: DataTypes.ENUM('pending', 'in_progress', 'awaiting_approval', 'completed', 'cancelled'),
+        type: DataTypes.ENUM('pending', 'approved', 'in_progress', 'awaiting_approval', 'completed', 'cancelled', 'closed'),
         allowNull: false,
         defaultValue: 'pending',
-        comment: 'Trạng thái của công việc bảo trì: pending (chờ xử lý), in_progress (đang thực hiện), awaiting_approval (chờ phê duyệt), completed (hoàn thành), cancelled (đã hủy)'
+        comment: 'Trạng thái bảo trì: pending, approved, in_progress, awaiting_approval, completed, cancelled, closed'
     },
     title: {
         type: DataTypes.STRING(255),
@@ -83,6 +83,21 @@ const Maintenance = sequelize.define('maintenance', {
         },
         comment: 'ID của kỹ thuật viên phụ trách'
     },
+    approved_by: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        comment: 'ID người phê duyệt'
+    },
+    approved_at: {
+        type: DataTypes.DATE,
+        allowNull: true,
+        comment: 'Thời gian phê duyệt'
+    },
+    approval_comment: {
+        type: DataTypes.STRING(500),
+        allowNull: true,
+        comment: 'Ghi chú của người phê duyệt'
+    },
     created_by: {
         type: DataTypes.INTEGER,
         allowNull: false,
@@ -91,6 +106,19 @@ const Maintenance = sequelize.define('maintenance', {
             key: 'id'
         },
         comment: 'ID của người tạo lịch bảo trì'
+    },
+    is_deleted: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false
+    },
+    deleted_at: {
+        type: DataTypes.DATE,
+        allowNull: true
+    },
+    deleted_by: {
+        type: DataTypes.INTEGER,
+        allowNull: true
     },
     notes: {
         type: DataTypes.TEXT,

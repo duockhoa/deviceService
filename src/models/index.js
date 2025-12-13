@@ -29,6 +29,7 @@ const { WorkRequestProgress } = require('./workRequestProgress.model');
 
 // Import Calibration
 const { Calibration } = require('./calibration.model');
+const { AuditLog } = require('./auditLog.model');
 
 // Import Handover models
 const Handover = require('./handover.model');
@@ -408,6 +409,7 @@ module.exports = {
     WorkRequest,
     WorkRequestProgress,
     Calibration,
+    AuditLog,
     Incidents,
     Notification,
     Handover,

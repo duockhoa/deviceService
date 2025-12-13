@@ -23,12 +23,15 @@ const handoversRouter = require('./handovers.router');
 const checklistTemplateRouter = require('./maintenanceChecklistTemplate.router');
 const rbacRouter = require('./rbac.router');
 const { seedRBAC } = require('../controllers/rbac.controllers');
+const { permissionGuard } = require('../middleware/permissionGuard');
 
 // ==================== PUBLIC ROUTES (NO AUTH) ====================
 // Đặt TRƯỚC authMiddleware
 
 // RBAC Seed - Tạo roles và permissions ban đầu
-router.post('/rbac/seed', seedRBAC);
+if (process.env.NODE_ENV !== 'production') {
+    router.post('/rbac/seed', seedRBAC);
+}
 
 // Public routes (không cần auth) - PHẢI ĐẶT TRƯỚC authMiddleware
 router.use('/maintenance-plan', maintenancePlanRouter);  // Kế hoạch bảo trì/import Excel (có route /template public)
@@ -51,7 +54,7 @@ router.use('/work-requests', workRequestsRouter); // Yêu cầu xử lý
 router.use('/notifications', notificationRouter); // Hệ thống thông báo
 router.use('/handovers', handoversRouter); // Bàn giao thiết bị
 router.use('/checklist-templates', checklistTemplateRouter); // Mẫu checklist
-router.use('/rbac', rbacRouter); // Phân quyền
+router.use('/rbac', permissionGuard('rbac.manage'), rbacRouter); // Phân quyền
 router.use('/scheduler', schedulerRouter); // Scheduled jobs testing & status
 router.use('/assets', assetsRouter);
 

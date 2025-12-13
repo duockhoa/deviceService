@@ -1,6 +1,7 @@
 const { Maintenance, Assets, User, MaintenanceConsumables, MaintenanceChecklist, MaintenanceWorkTask } = require('../models');
 const { Op } = require('sequelize');
 const NotificationService = require('../service/NotificationService');
+const { logAudit } = require('../utils/auditLogger');
 
 const buildMaintenanceCode = async () => {
     const year = new Date().getFullYear();
@@ -15,7 +16,14 @@ const buildMaintenanceCode = async () => {
 // GET /api/maintenance - Lấy tất cả maintenance records
 const getAllMaintenance = async (req, res) => {
     try {
+        const { include_deleted } = req.query;
+        const where = {};
+        if (include_deleted !== '1') {
+            where.is_deleted = false;
+        }
+
         const maintenance = await Maintenance.findAll({
+            where,
             include: [
                 {
                     model: Assets,
@@ -110,6 +118,18 @@ const getMaintenanceById = async (req, res) => {
                 message: 'Maintenance record not found'
             });
         }
+        if (maintenance.is_deleted) {
+            return res.status(400).json({
+                success: false,
+                message: 'Không thể từ chối bản ghi đã xóa'
+            });
+        }
+        if (maintenance.is_deleted) {
+            return res.status(400).json({
+                success: false,
+                message: 'Không thể phê duyệt bản ghi đã xóa'
+            });
+        }
 
         // Parse JSON fields in workTasks and get assigned user names
         const maintenanceData = maintenance.toJSON();
@@ -166,8 +186,9 @@ const getMaintenanceById = async (req, res) => {
 const getMaintenanceByAsset = async (req, res) => {
     try {
         const { assetId } = req.params;
+        const { include_deleted } = req.query;
         const maintenance = await Maintenance.findAll({
-            where: { asset_id: assetId },
+            where: { asset_id: assetId, ...(include_deleted === '1' ? {} : { is_deleted: false }) },
             include: [
                 {
                     model: Assets,
@@ -201,8 +222,9 @@ const getMaintenanceByAsset = async (req, res) => {
 const getMaintenanceByStatus = async (req, res) => {
     try {
         const { status } = req.params;
+        const { include_deleted } = req.query;
         const maintenance = await Maintenance.findAll({
-            where: { status: status },
+            where: { status: status, ...(include_deleted === '1' ? {} : { is_deleted: false }) },
             include: [
                 {
                     model: Assets,
@@ -236,8 +258,9 @@ const getMaintenanceByStatus = async (req, res) => {
 const getMaintenanceByTechnician = async (req, res) => {
     try {
         const { technicianId } = req.params;
+        const { include_deleted } = req.query;
         const maintenance = await Maintenance.findAll({
-            where: { technician_id: technicianId },
+            where: { technician_id: technicianId, ...(include_deleted === '1' ? {} : { is_deleted: false }) },
             include: [
                 {
                     model: Assets,
@@ -280,7 +303,7 @@ const getMyMaintenanceWork = async (req, res) => {
         }
 
         const maintenance = await Maintenance.findAll({
-            where: { technician_id: userId }, // Chỉ lấy công việc của user hiện tại
+            where: { technician_id: userId, is_deleted: false }, // Chỉ lấy công việc của user hiện tại
             include: [
                 {
                     model: Assets,
@@ -315,7 +338,8 @@ const getMaintenanceResults = async (req, res) => {
     try {
         const maintenance = await Maintenance.findAll({
             where: {
-                status: ['in_progress', 'awaiting_approval', 'completed']
+                status: ['in_progress', 'awaiting_approval', 'completed'],
+                is_deleted: false
             },
             include: [
                 {
@@ -422,6 +446,17 @@ const createMaintenance = async (req, res) => {
         console.log('Creating maintenance with data:', processedData);
 
         const maintenance = await Maintenance.create(processedData, { transaction });
+
+        await logAudit({
+            entityType: 'maintenance',
+            entityId: maintenance.id,
+            action: 'MAINTENANCE_CREATE',
+            before: null,
+            after: maintenance.toJSON(),
+            reason: maintenanceData.reason,
+            user: req.user,
+            req
+        });
 
         // Handle consumables if provided
         if (consumables && Array.isArray(consumables) && consumables.length > 0) {
@@ -594,22 +629,35 @@ const updateMaintenance = async (req, res) => {
         }
 
         const oldTechnicianId = existingMaintenance.technician_id;
+        const lockedStatuses = ['approved', 'in_progress', 'completed', 'closed', 'cancelled'];
+        const lockedFields = ['asset_id', 'title', 'maintenance_type', 'priority', 'scheduled_date', 'description', 'location', 'safety_requirements', 'tools_required', 'measuring_tools', 'safety_tools', 'spare_parts', 'estimated_cost'];
+        const allowedWhenLocked = new Set(['actual_start_date', 'actual_end_date', 'actual_duration', 'notes']);
+        if (lockedStatuses.includes(existingMaintenance.status)) {
+            if (consumables !== undefined || checklist !== undefined) {
+                if (transaction && !transaction.finished) await transaction.rollback();
+                return res.status(400).json({
+                    success: false,
+                    message: 'Không được sửa checklist/consumables sau khi đã approve'
+                });
+            }
+            const attempted = Object.keys(updateData || {}).filter(
+                (field) => lockedFields.includes(field) || !allowedWhenLocked.has(field)
+            );
+            if (attempted.length) {
+                if (transaction && !transaction.finished) await transaction.rollback();
+                return res.status(400).json({
+                    success: false,
+                    message: `Không được sửa các trường sau khi approve: ${attempted.join(', ')}`
+                });
+            }
+        }
 
-        // Set default values for required fields if not provided or null
-        if (!updateData.priority || updateData.priority === null || updateData.priority === '') {
-            updateData.priority = 'medium';
-        }
-        if (!updateData.title || updateData.title === null || updateData.title === '') {
-            updateData.title = 'Maintenance Task';
-        }
-        if (!updateData.status || updateData.status === null || updateData.status === '') {
-            updateData.status = 'pending';
-        }
-        if (!updateData.scheduled_date || updateData.scheduled_date === null || updateData.scheduled_date === '') {
-            updateData.scheduled_date = new Date();
-        }
-        if (!updateData.asset_id || updateData.asset_id === null || updateData.asset_id === '') {
-            updateData.asset_id = existingMaintenance.asset_id;
+        if ('status' in updateData) {
+            if (transaction && !transaction.finished) await transaction.rollback();
+            return res.status(400).json({
+                success: false,
+                message: 'Không được cập nhật trạng thái trực tiếp. Vui lòng dùng các endpoint approve/start/complete/close.'
+            });
         }
 
         // Normalize maintenance_type from legacy value
@@ -772,6 +820,16 @@ const updateMaintenance = async (req, res) => {
             message: 'Maintenance record updated successfully'
         });
 
+        await logAudit({
+            entityType: 'maintenance',
+            entityId: updatedMaintenance.id,
+            action: 'MAINTENANCE_UPDATE',
+            before: existingMaintenance.toJSON(),
+            after: updatedMaintenance.toJSON(),
+            user: req.user,
+            req
+        });
+
         // 🆕 Gửi thông báo nếu có thay đổi technician
         try {
             const newTechnicianId = updatedMaintenance.technician_id;
@@ -814,20 +872,48 @@ const updateMaintenance = async (req, res) => {
 const deleteMaintenance = async (req, res) => {
     try {
         const { id } = req.params;
-        const deletedRowsCount = await Maintenance.destroy({
-            where: { id: id }
-        });
-
-        if (deletedRowsCount === 0) {
-            return res.status(404).json({
+        const { reason } = req.body;
+        if (!reason) {
+            return res.status(400).json({
                 success: false,
-                message: 'Maintenance record not found'
+                message: 'Cần nhập reason để từ chối'
             });
         }
+        if (!reason) {
+            return res.status(400).json({ success: false, message: 'Cần nhập reason để xóa mềm' });
+        }
+
+        const maintenance = await Maintenance.findByPk(id);
+        if (!maintenance) {
+            return res.status(404).json({ success: false, message: 'Maintenance record not found' });
+        }
+
+        if (maintenance.status !== 'pending') {
+            return res.status(400).json({ success: false, message: 'Chỉ cho phép xóa mềm khi trạng thái pending' });
+        }
+
+        const before = maintenance.toJSON();
+        await maintenance.update({
+            is_deleted: true,
+            deleted_at: new Date(),
+            deleted_by: req.user?.id || null,
+            notes: reason ? `Soft delete: ${reason}${maintenance.notes ? '\n---\n' + maintenance.notes : ''}` : maintenance.notes
+        });
 
         res.status(200).json({
             success: true,
-            message: 'Maintenance record deleted successfully'
+            message: 'Maintenance record soft deleted'
+        });
+
+        await logAudit({
+            entityType: 'maintenance',
+            entityId: maintenance.id,
+            action: 'MAINTENANCE_SOFT_DELETE',
+            before,
+            after: maintenance.toJSON(),
+            reason,
+            user: req.user,
+            req
         });
     } catch (error) {
         res.status(500).json({
@@ -842,7 +928,7 @@ const deleteMaintenance = async (req, res) => {
 const approveMaintenance = async (req, res) => {
     try {
         const { id } = req.params;
-        const { notes, actual_end_date } = req.body;
+        const { notes, actual_end_date, approval_comment } = req.body;
 
         // Tìm maintenance record
         const maintenance = await Maintenance.findByPk(id);
@@ -855,17 +941,22 @@ const approveMaintenance = async (req, res) => {
         }
 
         // Kiểm tra trạng thái hiện tại
-        if (maintenance.status !== 'awaiting_approval') {
+        if (maintenance.status !== 'pending' && maintenance.status !== 'awaiting_approval') {
             return res.status(400).json({
                 success: false,
-                message: 'Chỉ có thể phê duyệt lịch bảo trì đang ở trạng thái "Chờ phê duyệt"'
+                message: 'Chỉ có thể phê duyệt lịch bảo trì ở trạng thái pending/awaiting_approval'
             });
         }
 
-        // Cập nhật trạng thái thành completed
+        const before = maintenance.toJSON();
+
+        // Cập nhật trạng thái thành approved
         const updateData = {
-            status: 'completed',
-            notes: notes || maintenance.notes
+            status: 'approved',
+            notes: notes || maintenance.notes,
+            approved_by: req.user?.id || null,
+            approved_at: new Date(),
+            approval_comment: approval_comment || null
         };
 
         // Nếu có ngày kết thúc thực tế, cập nhật
@@ -898,6 +989,17 @@ const approveMaintenance = async (req, res) => {
             success: true,
             data: updatedMaintenance,
             message: 'Phê duyệt lịch bảo trì thành công'
+        });
+
+        await logAudit({
+            entityType: 'maintenance',
+            entityId: updatedMaintenance.id,
+            action: 'MAINTENANCE_APPROVE',
+            before,
+            after: updatedMaintenance.toJSON(),
+            reason: approval_comment || notes,
+            user: req.user,
+            req
         });
 
         // Send notification after successful approval
@@ -939,12 +1041,14 @@ const rejectMaintenance = async (req, res) => {
         }
 
         // Kiểm tra trạng thái hiện tại
-        if (maintenance.status !== 'awaiting_approval') {
+        if (maintenance.status !== 'pending' && maintenance.status !== 'awaiting_approval') {
             return res.status(400).json({
                 success: false,
-                message: 'Chỉ có thể từ chối lịch bảo trì đang ở trạng thái "Chờ phê duyệt"'
+                message: 'Chỉ có thể từ chối lịch bảo trì ở trạng thái pending/awaiting_approval'
             });
         }
+
+        const before = maintenance.toJSON();
 
         // Chuyển về trạng thái in_progress để kỹ thuật viên sửa lại
         await maintenance.update({
@@ -972,6 +1076,17 @@ const rejectMaintenance = async (req, res) => {
             success: true,
             data: updatedMaintenance,
             message: 'Đã từ chối phê duyệt. Lịch bảo trì được chuyển về trạng thái "Đang thực hiện"'
+        });
+
+        await logAudit({
+            entityType: 'maintenance',
+            entityId: updatedMaintenance.id,
+            action: 'MAINTENANCE_REJECT',
+            before,
+            after: updatedMaintenance.toJSON(),
+            reason,
+            user: req.user,
+            req
         });
 
         // Send notification after successful rejection
@@ -1206,7 +1321,8 @@ const getMaintenanceReportSummary = async (req, res) => {
             where: {
                 scheduled_date: {
                     [Op.between]: [currentPeriodStart, currentPeriodEnd]
-                }
+                },
+                is_deleted: false
             },
             include: [{
                 model: Assets,
@@ -1220,7 +1336,8 @@ const getMaintenanceReportSummary = async (req, res) => {
             where: {
                 scheduled_date: {
                     [Op.between]: [previousPeriodStart, previousPeriodEnd]
-                }
+                },
+                is_deleted: false
             }
         });
 
@@ -1334,7 +1451,8 @@ const getMonthlyMaintenanceReport = async (req, res) => {
                 where: {
                     scheduled_date: {
                         [Op.between]: [monthStart, monthEnd]
-                    }
+                    },
+                    is_deleted: false
                 }
             });
 
@@ -1378,14 +1496,25 @@ const startMaintenance = async (req, res) => {
                 message: 'Không tìm thấy lệnh bảo trì'
             });
         }
+        if (maintenance.is_deleted) {
+            return res.status(400).json({
+                success: false,
+                message: 'Không thể cập nhật tiến độ của bản ghi đã xóa'
+            });
+        }
+        if (maintenance.is_deleted) {
+            return res.status(400).json({ success: false, message: 'Lệnh bảo trì đã bị xóa' });
+        }
 
-        // Chỉ cho phép start từ status pending hoặc awaiting_approval
-        if (!['pending', 'awaiting_approval'].includes(maintenance.status)) {
+        // Chỉ cho phép start từ status approved
+        if (maintenance.status !== 'approved') {
             return res.status(400).json({
                 success: false,
                 message: `Không thể bắt đầu lệnh bảo trì với trạng thái: ${maintenance.status}`
             });
         }
+
+        const before = maintenance.toJSON();
 
         // Cập nhật status và ghi thời gian bắt đầu
         await maintenance.update({
@@ -1410,6 +1539,16 @@ const startMaintenance = async (req, res) => {
             data: updatedMaintenance
         });
 
+        await logAudit({
+            entityType: 'maintenance',
+            entityId: updatedMaintenance.id,
+            action: 'MAINTENANCE_START',
+            before,
+            after: updatedMaintenance.toJSON(),
+            user: req.user,
+            req
+        });
+
         // Send notification after successful start
         try {
             await NotificationService.onMaintenanceStarted({
@@ -1429,6 +1568,146 @@ const startMaintenance = async (req, res) => {
             message: 'Lỗi khi bắt đầu lệnh bảo trì',
             error: error.message
         });
+    }
+};
+
+// POST /api/maintenance/:id/complete - Hoàn thành bảo trì
+const completeMaintenance = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const maintenance = await Maintenance.findByPk(id);
+
+        if (!maintenance) {
+            return res.status(404).json({ success: false, message: 'Không tìm thấy lệnh bảo trì' });
+        }
+        if (maintenance.is_deleted) {
+            return res.status(400).json({ success: false, message: 'Lệnh bảo trì đã bị xóa' });
+        }
+        if (maintenance.status !== 'in_progress') {
+            return res.status(400).json({ success: false, message: 'Chỉ hoàn thành từ trạng thái in_progress' });
+        }
+
+        const before = maintenance.toJSON();
+        const actualEnd = req.body.actual_end_date ? new Date(req.body.actual_end_date) : new Date();
+        let actualDuration = maintenance.actual_duration;
+        if (maintenance.actual_start_date) {
+            const diffMs = actualEnd - new Date(maintenance.actual_start_date);
+            if (Number.isFinite(diffMs) && diffMs >= 0) {
+                actualDuration = +(diffMs / 3600000).toFixed(2);
+            }
+        }
+
+        await maintenance.update({
+            status: 'completed',
+            actual_end_date: actualEnd,
+            actual_duration: actualDuration
+        });
+
+        const updated = await Maintenance.findByPk(id);
+        res.status(200).json({ success: true, message: 'Đã hoàn thành lệnh bảo trì', data: updated });
+
+        await logAudit({
+            entityType: 'maintenance',
+            entityId: updated.id,
+            action: 'MAINTENANCE_COMPLETE',
+            before,
+            after: updated.toJSON(),
+            user: req.user,
+            req
+        });
+    } catch (error) {
+        console.error('Error completing maintenance:', error);
+        res.status(500).json({ success: false, message: 'Lỗi khi hoàn thành lệnh bảo trì', error: error.message });
+    }
+};
+
+// POST /api/maintenance/:id/close - Đóng lệnh bảo trì đã hoàn thành
+const closeMaintenance = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { reason } = req.body;
+        if (!reason) {
+            return res.status(400).json({ success: false, message: 'Cần nhập reason để đóng lệnh' });
+        }
+
+        const maintenance = await Maintenance.findByPk(id);
+        if (!maintenance) {
+            return res.status(404).json({ success: false, message: 'Không tìm thấy lệnh bảo trì' });
+        }
+        if (maintenance.is_deleted) {
+            return res.status(400).json({ success: false, message: 'Lệnh bảo trì đã bị xóa' });
+        }
+        if (maintenance.status !== 'completed') {
+            return res.status(400).json({ success: false, message: 'Chỉ đóng lệnh ở trạng thái completed' });
+        }
+
+        const before = maintenance.toJSON();
+        await maintenance.update({
+            status: 'closed',
+            notes: reason ? `${reason}${maintenance.notes ? '\n---\n' + maintenance.notes : ''}` : maintenance.notes
+        });
+
+        const updated = await Maintenance.findByPk(id);
+        res.status(200).json({ success: true, message: 'Đã đóng lệnh bảo trì', data: updated });
+
+        await logAudit({
+            entityType: 'maintenance',
+            entityId: updated.id,
+            action: 'MAINTENANCE_CLOSE',
+            before,
+            after: updated.toJSON(),
+            reason,
+            user: req.user,
+            req
+        });
+    } catch (error) {
+        console.error('Error closing maintenance:', error);
+        res.status(500).json({ success: false, message: 'Lỗi khi đóng lệnh bảo trì', error: error.message });
+    }
+};
+
+// POST /api/maintenance/:id/cancel - Hủy lệnh khi đang thực hiện
+const cancelMaintenance = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { reason } = req.body;
+        if (!reason) {
+            return res.status(400).json({ success: false, message: 'Cần nhập reason để hủy lệnh' });
+        }
+
+        const maintenance = await Maintenance.findByPk(id);
+        if (!maintenance) {
+            return res.status(404).json({ success: false, message: 'Không tìm thấy lệnh bảo trì' });
+        }
+        if (maintenance.is_deleted) {
+            return res.status(400).json({ success: false, message: 'Lệnh bảo trì đã bị xóa' });
+        }
+        if (maintenance.status !== 'in_progress') {
+            return res.status(400).json({ success: false, message: 'Chỉ hủy lệnh khi đang in_progress' });
+        }
+
+        const before = maintenance.toJSON();
+        await maintenance.update({
+            status: 'cancelled',
+            notes: reason ? `Hủy: ${reason}${maintenance.notes ? '\n---\n' + maintenance.notes : ''}` : maintenance.notes
+        });
+
+        const updated = await Maintenance.findByPk(id);
+        res.status(200).json({ success: true, message: 'Đã hủy lệnh bảo trì', data: updated });
+
+        await logAudit({
+            entityType: 'maintenance',
+            entityId: updated.id,
+            action: 'MAINTENANCE_CANCEL',
+            before,
+            after: updated.toJSON(),
+            reason,
+            user: req.user,
+            req
+        });
+    } catch (error) {
+        console.error('Error cancelling maintenance:', error);
+        res.status(500).json({ success: false, message: 'Lỗi khi hủy lệnh bảo trì', error: error.message });
     }
 };
 
@@ -1456,6 +1735,8 @@ const saveMaintenanceProgress = async (req, res) => {
             });
         }
 
+        const before = maintenance.toJSON();
+
         // Cập nhật notes (có thể mở rộng thêm các field khác nếu cần)
         await maintenance.update({
             notes: notes || maintenance.notes,
@@ -1476,6 +1757,16 @@ const saveMaintenanceProgress = async (req, res) => {
             success: true,
             message: 'Đã lưu tiến độ công việc',
             data: updatedMaintenance
+        });
+
+        await logAudit({
+            entityType: 'maintenance',
+            entityId: updatedMaintenance.id,
+            action: 'MAINTENANCE_PROGRESS',
+            before,
+            after: updatedMaintenance.toJSON(),
+            user: req.user,
+            req
         });
     } catch (error) {
         console.error('Error saving maintenance progress:', error);
@@ -1504,6 +1795,9 @@ module.exports = {
     startWorkTask,
     completeWorkTask,
     startMaintenance,
+    completeMaintenance,
+    closeMaintenance,
+    cancelMaintenance,
     saveMaintenanceProgress,
     getMaintenanceReportSummary,
     getMonthlyMaintenanceReport,

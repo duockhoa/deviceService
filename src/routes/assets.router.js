@@ -4,6 +4,8 @@ const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
 
 const { permissionGuard } = require('../middleware/permissionGuard');
+const validateRequest = require('../middleware/validateMiddleware');
+const { createAssetSchema, updateAssetSchema } = require('../validators/assetValidator');
 
 const {
     getAssetById,
@@ -34,8 +36,8 @@ router.get('/by-category/:categoryId', permissionGuard('assets.view'), getAssets
 router.get('/by-department/:departmentName', permissionGuard('assets.view'), getAssetsByDepartment);
 router.get('/:id/consumables', permissionGuard('assets.view'), getAssetConsumables);
 router.get('/:id', permissionGuard('assets.view'), getAssetById);
-router.post('/', permissionGuard('assets.create'), createAsset);
-router.put('/:id', permissionGuard('assets.update'), updateAsset);
+router.post('/', permissionGuard('assets.create'), validateRequest(createAssetSchema), createAsset);
+router.put('/:id', permissionGuard('assets.update'), validateRequest(updateAssetSchema), updateAsset);
 router.delete('/:id', permissionGuard('assets.delete'), deleteAsset);
 
 module.exports = router;

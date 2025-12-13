@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middleware/authMiddleware');
 const { permissionGuard } = require('../middleware/permissionGuard');
+const validateRequest = require('../middleware/validateMiddleware');
+const { createCalibrationSchema, updateCalibrationSchema } = require('../validators/calibrationValidator');
 const {
     getAllCalibrations,
     getCalibrationById,
@@ -21,8 +23,8 @@ router.get('/by-asset/:assetId', permissionGuard('calibration.view'), getCalibra
 router.get('/by-status/:status', permissionGuard('calibration.view'), getCalibrationsByStatus);
 router.get('/by-technician/:technicianId', permissionGuard('calibration.view'), getCalibrationsByTechnician);
 router.get('/:id', permissionGuard('calibration.view'), getCalibrationById);
-router.post('/', permissionGuard('calibration.create'), createCalibration);
-router.put('/:id', permissionGuard('calibration.update'), updateCalibration);
+router.post('/', permissionGuard('calibration.create'), validateRequest(createCalibrationSchema), createCalibration);
+router.put('/:id', permissionGuard('calibration.update'), validateRequest(updateCalibrationSchema), updateCalibration);
 router.delete('/:id', permissionGuard('calibration.update'), deleteCalibration);
 
 module.exports = router;

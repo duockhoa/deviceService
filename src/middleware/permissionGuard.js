@@ -1,8 +1,5 @@
 const { User, Role, Permission } = require('../models');
 
-// DEV_TEAM bypass
-const DEV_TEAM_IDS = [596, 947];
-
 /**
  * Permission Guard Middleware
  * Kiểm tra user có quyền cần thiết không
@@ -19,11 +16,6 @@ const permissionGuard = (requiredPermission) => {
                     success: false,
                     message: 'Người dùng chưa đăng nhập'
                 });
-            }
-
-            // DEV_TEAM bypass - always allow
-            if (DEV_TEAM_IDS.includes(userId)) {
-                return next();
             }
 
             // Lấy user với roles và permissions
@@ -95,11 +87,6 @@ const permissionGuardAny = (requiredPermissions = []) => {
                     success: false,
                     message: 'Người dùng chưa đăng nhập'
                 });
-            }
-
-            // DEV_TEAM bypass
-            if (DEV_TEAM_IDS.includes(userId)) {
-                return next();
             }
 
             const user = await User.findByPk(userId, {

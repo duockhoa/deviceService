@@ -518,7 +518,7 @@ const updateAsset = async (req, res) => {
     }
 };
 
-// DELETE /api/assets/:id - Xóa asset (cascade delete components)
+// DELETE /api/assets/:id - Soft delete asset (không xóa maintenance)
 const deleteAsset = async (req, res) => {
     const t = await sequelize.transaction();
     
@@ -534,84 +534,20 @@ const deleteAsset = async (req, res) => {
             });
         }
 
-        // Xóa tất cả related data trước (nếu không có foreign key cascade)
-        
-        // Lấy danh sách maintenance_id của asset này để xóa related tables
-        const maintenanceRecords = await Maintenance.findAll({
-            where: { asset_id: id },
-            attributes: ['id'],
-            transaction: t
-        });
-        const maintenanceIds = maintenanceRecords.map(m => m.id);
-
-        // Xóa tất cả maintenance related data
-        if (maintenanceIds.length > 0) {
-            await MaintenanceChecklist.destroy({
-                where: { maintenance_id: maintenanceIds },
-                transaction: t
-            });
-
-            await MaintenanceProgress.destroy({
-                where: { maintenance_id: maintenanceIds },
-                transaction: t
-            });
-
-            await MaintenanceImages.destroy({
-                where: { maintenance_id: maintenanceIds },
-                transaction: t
-            });
-
-            await MaintenanceConsumables.destroy({
-                where: { maintenance_id: maintenanceIds },
-                transaction: t
-            });
-
-            await MaintenanceAttachments.destroy({
-                where: { maintenance_id: maintenanceIds },
-                transaction: t
-            });
-        }
-
-        // Xóa maintenance records của asset này
-        await Maintenance.destroy({
-            where: { asset_id: id },
-            transaction: t
-        });
-
-        // Xóa asset related data
-        await AssetComponent.destroy({
-            where: { asset_id: id },
-            transaction: t
-        });
-
-        await AssetGeneralInfo.destroy({
-            where: { asset_id: id },
-            transaction: t
-        });
-
-        await AssetSpecifications.destroy({
-            where: { asset_id: id },
-            transaction: t
-        });
-
-        await AssetAttachment.destroy({
-            where: { asset_id: id },
-            transaction: t
-        });
-
-        await AssetConsumables.destroy({
-            where: { asset_id: id },
-            transaction: t
-        });
-
-        // Xóa asset
-        await asset.destroy({ transaction: t });
+        // Soft delete asset: giữ maintenance để đảm bảo traceability
+        await asset.update(
+            {
+                status: 'inactive',
+                updated_at: new Date()
+            },
+            { transaction: t }
+        );
 
         await t.commit();
 
         res.status(200).json({
             success: true,
-            message: 'Asset and all related data deleted successfully'
+            message: 'Asset đã được vô hiệu hóa (soft delete). Maintenance giữ nguyên để audit.'
         });
     } catch (error) {
         await t.rollback();

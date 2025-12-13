@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const authMiddleware = require('../middleware/authMiddleware');
+const { permissionGuard } = require('../middleware/permissionGuard');
 
 // Import individual job tasks
 const {
@@ -9,6 +11,9 @@ const {
     checkCalibrationOverdue,
     checkWarrantyExpiring
 } = require('../jobs/notificationScheduler');
+
+router.use(authMiddleware);
+router.use(permissionGuard('scheduler.manage'));
 
 /**
  * POST /api/v1/scheduler/test/maintenance-due-soon

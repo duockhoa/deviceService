@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middleware/authMiddleware');
 const { permissionGuard } = require('../middleware/permissionGuard');
+const validateRequest = require('../middleware/validateMiddleware');
+const { createMaintenanceSchema, updateMaintenanceSchema } = require('../validators/maintenanceValidator');
 const {
     getAllMaintenance,
     getMaintenanceById,
@@ -19,6 +21,9 @@ const {
     startWorkTask,
     completeWorkTask,
     startMaintenance,
+    completeMaintenance,
+    closeMaintenance,
+    cancelMaintenance,
     saveMaintenanceProgress,
     getMaintenanceReportSummary,
     getMonthlyMaintenanceReport
@@ -38,14 +43,17 @@ router.get('/:id', permissionGuard('maintenance.view'), getMaintenanceById);
 router.get('/', permissionGuard('maintenance.view'), getAllMaintenance);
 
 // CRUD routes
-router.post('/', permissionGuard('maintenance.create'), createMaintenance);
-router.put('/:id', permissionGuard('maintenance.update'), updateMaintenance);
+router.post('/', permissionGuard('maintenance.create'), validateRequest(createMaintenanceSchema), createMaintenance);
+router.put('/:id', permissionGuard('maintenance.update'), validateRequest(updateMaintenanceSchema), updateMaintenance);
 router.delete('/:id', permissionGuard('maintenance.update'), deleteMaintenance);
 
 // Approval routes
 router.post('/:id/approve', permissionGuard('maintenance.approve'), approveMaintenance);
 router.post('/:id/reject', permissionGuard('maintenance.approve'), rejectMaintenance);
 router.post('/:id/start', permissionGuard('maintenance.update'), startMaintenance);
+router.post('/:id/complete', permissionGuard('maintenance.update'), completeMaintenance);
+router.post('/:id/close', permissionGuard('maintenance.approve'), closeMaintenance);
+router.post('/:id/cancel', permissionGuard('maintenance.approve'), cancelMaintenance);
 router.put('/:id/save-progress', permissionGuard('maintenance.update'), saveMaintenanceProgress);
 
 // Work task routes
