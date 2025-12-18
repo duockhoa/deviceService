@@ -60,25 +60,25 @@ const { User, Role, UserRole, RolePermission } = require('../src/models');
             }
         }
 
-        console.log('\n✅ HOÀN THÀNH!\n');
-        console.log('📊 PHÂN BỔ ROLES PRODUCTION:');
-        console.log(`   👑 Admin: ${adminCount} user (User ID 947 - 0947)`);
-        console.log(`   👀 Viewer: ${viewerCount} users`);
-        console.log(`   📈 Tổng: ${allUsers.length} users`);
+        console.log('\n HOÀN THÀNH!\n');
+        console.log(' PHÂN BỔ ROLES PRODUCTION:');
+        console.log(`    Admin: ${adminCount} user (User ID 947 - 0947)`);
+        console.log(`    Viewer: ${viewerCount} users`);
+        console.log(`    Tổng: ${allUsers.length} users`);
         
-        console.log('\n🔐 QUYỀN TRUY CẬP:');
-        console.log('   ✅ User 947: CÓ THỂ xem menu Phân quyền và quản lý');
-        console.log('   ❌ 181 users khác: KHÔNG THỂ xem menu Phân quyền');
+        console.log('\n QUYỀN TRUY CẬP:');
+        console.log('   User 947: CÓ THỂ xem menu Phân quyền và quản lý');
+        console.log('    181 users khác: KHÔNG THỂ xem menu Phân quyền');
 
         console.log('\n💡 LƯU Ý:');
         console.log('   - Tất cả users cần F5/refresh để load lại permissions');
         console.log('   - Bạn có thể vào /rbac để cấp quyền cho users khác nếu cần');
 
-        console.log('\n🎯 SẴN SÀNG ĐƯA LÊN PRODUCTION!');
+        console.log('\n SẴN SÀNG ĐƯA LÊN PRODUCTION!');
 
         process.exit(0);
     } catch (error) {
-        console.error('❌ Lỗi:', error.message);
+        console.error(' Lỗi:', error.message);
         console.error(error);
         process.exit(1);
     }
