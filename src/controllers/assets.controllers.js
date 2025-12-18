@@ -1414,6 +1414,55 @@ const getAssetConsumables = async (req, res) => {
     }
 };
 
+const getAssetByDkCode = async (req, res) => {
+    try {
+        const { dkCode } = req.params;
+        const asset = await Assets.findOne({
+            where: { dk_code: dkCode },
+            include: [
+                { 
+                    model: AssetSubCategories, 
+                    as: 'SubCategory',
+                    include: [{
+                        model: AssetCategories,
+                        as: 'Category',
+                        attributes: ['id', 'code', 'name', 'description']
+                    }]
+                },
+                { model: User, as: 'Creator', attributes: ['id', 'name', 'employee_code'] },
+                { model: Departments, as: 'Department' },
+                {
+                    model: Areas,
+                    as: 'Area',
+                    include: [{ model: Plants, as: 'Plant' }]
+                },
+                {
+                    model: AssetComponent,
+                    as: 'Components'
+                }
+            ]
+        });
+
+        if (!asset) {
+            return res.status(404).json({
+                success: false,
+                message: 'Asset not found'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: asset
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching asset by DK code',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     getAllAssets,
     getAssetById,
@@ -1426,6 +1475,7 @@ module.exports = {
     getAssetsByDepartment,
     searchAssets,
     getAssetByCode,
+    getAssetByDkCode,
     getAssetConsumables,
     exportTemplate,
     importFromExcel

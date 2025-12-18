@@ -19,6 +19,7 @@ const {
     getAssetsByDepartment,
     searchAssets,
     getAssetByCode,
+    getAssetByDkCode,
     getAssetConsumables,        // Lấy vật tư tiêu hao
     exportTemplate,
     importFromExcel
@@ -30,6 +31,7 @@ router.get('/search', permissionGuard('assets.view'), searchAssets);
 router.get('/export/template', permissionGuard('assets.view'), exportTemplate);
 router.post('/import/excel', upload.single('file'), permissionGuard('assets.create'), importFromExcel);
 router.get('/by-code/:assetCode', permissionGuard('assets.view'), getAssetByCode);
+router.get('/by-dk/:dkCode', permissionGuard('assets.view'), getAssetByDkCode);
 router.get('/by-area/:areaId', permissionGuard('assets.view'), getAssetsByArea);
 router.get('/by-sub-category/:subCategoryId', permissionGuard('assets.view'), getAssetsBySubCategory);
 router.get('/by-category/:categoryId', permissionGuard('assets.view'), getAssetsByCategory);
