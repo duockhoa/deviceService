@@ -1,3 +1,4 @@
+const { Op } = require('sequelize');
 const { Assets, AssetCategories, AssetSubCategories, User, Departments, Areas, Plants, AssetGeneralInfo, AssetComponent, AssetSpecifications, AssetAttachment, AssetConsumables, SpecificationCategories, Maintenance, MaintenanceChecklist, MaintenanceProgress, MaintenanceImages, MaintenanceConsumables, MaintenanceAttachments } = require('../models');
 const  sequelize  = require('../configs/sequelize');
 const XLSX = require('xlsx');
@@ -225,9 +226,9 @@ const createAsset = async (req, res) => {
             components = []
         } = req.body;
         const normalizedDkCode = typeof dk_code === 'string'
-            ? dk_code.trim() || null
+            ? dk_code.trim().toUpperCase() || null
             : dk_code
-                ? dk_code.toString().trim() || null
+                ? dk_code.toString().trim().toUpperCase() || null
                 : null;
 
         // Validation cơ bản
@@ -258,8 +259,22 @@ const createAsset = async (req, res) => {
             await t.rollback();
             return res.status(409).json({
                 success: false,
-                message: 'Asset code already exists'
+            message: 'Asset code already exists'
+        });
+        }
+
+        // Soft check dk_code trùng (nếu có)
+        if (normalizedDkCode) {
+            const existingDk = await Assets.findOne({
+                where: { dk_code: normalizedDkCode }
             });
+            if (existingDk) {
+                await t.rollback();
+                return res.status(409).json({
+                    success: false,
+                    message: 'DK code already exists'
+                });
+            }
         }
 
         // Tạo asset cơ bản
@@ -342,10 +357,7 @@ const createAsset = async (req, res) => {
                     as: 'GeneralInfo'
                 },
                 // Include created components
-                {
-                    model: AssetComponent,
-                    as: 'Components'
-                }
+                // Keep include light for lookup panel
             ]
         });
 
@@ -380,7 +392,9 @@ const updateAsset = async (req, res) => {
         const { id } = req.params;
         const { generalInfo, components, ...assetData } = req.body;
         if (assetData.dk_code !== undefined) {
-            assetData.dk_code = assetData.dk_code ? assetData.dk_code.toString().trim() : null;
+            assetData.dk_code = assetData.dk_code
+                ? assetData.dk_code.toString().trim().toUpperCase()
+                : null;
         }
         
         const asset = await Assets.findByPk(id);
@@ -391,6 +405,23 @@ const updateAsset = async (req, res) => {
                 success: false,
                 message: 'Asset not found'
             });
+        }
+
+        // Kiểm tra dk_code trùng (nếu có)
+        if (assetData.dk_code) {
+            const existingDk = await Assets.findOne({
+                where: {
+                    dk_code: assetData.dk_code,
+                    id: { [Op.ne]: id }
+                }
+            });
+            if (existingDk) {
+                await t.rollback();
+                return res.status(409).json({
+                    success: false,
+                    message: 'DK code already exists'
+                });
+            }
         }
 
         // Kiểm tra sub_category có tồn tại không (nếu có thay đổi)
@@ -1448,6 +1479,10 @@ const getAssetByDkCode = async (req, res) => {
                     model: Areas,
                     as: 'Area',
                     include: [{ model: Plants, as: 'Plant' }]
+                },
+                {
+                    model: AssetGeneralInfo,
+                    as: 'GeneralInfo'
                 },
                 {
                     model: AssetComponent,

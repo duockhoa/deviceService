@@ -8,7 +8,8 @@ const mockSequelize = {
     attributes,
     belongsTo: jest.fn(),
     hasMany: jest.fn(),
-    hasOne: jest.fn()
+    hasOne: jest.fn(),
+    belongsToMany: jest.fn()
   }))
 };
 

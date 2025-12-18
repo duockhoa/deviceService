@@ -18,6 +18,7 @@ app.use(cookieParser());
 
 // cors
 const cors = require('cors');
+const allowAllOrigins = process.env.ALLOW_ALL_ORIGINS === '1' || process.env.ALLOWED_ORIGINS === '*';
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000')
     .split(',')
     .map((o) => o.trim())
@@ -65,21 +66,34 @@ const isAllowedOrigin = (origin) => {
     }
     return originMatchers.some((matcher) => matcher(origin));
 };
-app.use(
-    cors({
-        origin: (origin, callback) => {
-            if (isAllowedOrigin(origin)) {
-                return callback(null, true);
-            }
-            const error = new Error('Not allowed by CORS');
-            error.statusCode = 403;
-            return callback(error);
-        },
-        credentials: true,
-        methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-        allowedHeaders: ['Content-Type', 'Authorization', 'X-Custom-Header']
-    })
-);
+
+// If ALLOW_ALL_ORIGINS is set, short-circuit to allow any origin (echo back request origin)
+if (allowAllOrigins) {
+    app.use(
+        cors({
+            origin: true,
+            credentials: true,
+            methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+            allowedHeaders: ['Content-Type', 'Authorization', 'X-Custom-Header']
+        })
+    );
+} else {
+    app.use(
+        cors({
+            origin: (origin, callback) => {
+                if (isAllowedOrigin(origin)) {
+                    return callback(null, true);
+                }
+                const error = new Error('Not allowed by CORS');
+                error.statusCode = 403;
+                return callback(error);
+            },
+            credentials: true,
+            methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+            allowedHeaders: ['Content-Type', 'Authorization', 'X-Custom-Header']
+        })
+    );
+}
 
 // body-parser
 app.use(express.json({ limit: '100MB' }));
