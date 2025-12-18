@@ -18,11 +18,57 @@ app.use(cookieParser());
 
 // cors
 const cors = require('cors');
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000').split(',').map((o) => o.trim());
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+
+// Allow exact matches and simple wildcard entries like *.example.com
+const originMatchers = allowedOrigins.map((origin) => {
+    if (!origin.includes('*')) {
+        let normalized = origin;
+        try {
+            normalized = new URL(origin).origin;
+        } catch {
+            // keep the raw origin if it cannot be parsed
+        }
+        return (incomingOrigin) => {
+            try {
+                return new URL(incomingOrigin).origin === normalized;
+            } catch {
+                return incomingOrigin === normalized;
+            }
+        };
+    }
+
+    const strippedOrigin = origin.replace(/^https?:\/\//, '');
+    const baseDomain = strippedOrigin.replace(/^\*\./, '');
+    return (incomingOrigin) => {
+        try {
+            const { hostname } = new URL(incomingOrigin);
+            return hostname === baseDomain || hostname.endsWith(`.${baseDomain}`);
+        } catch {
+            return false;
+        }
+    };
+});
+
+const isAllowedOrigin = (origin) => {
+    if (!origin) return true; // allow same-origin/non-browser requests
+    try {
+        const { hostname } = new URL(origin);
+        if (hostname.endsWith('dkpharma.io.vn')) {
+            return true;
+        }
+    } catch {
+        // fall through to matcher checks below
+    }
+    return originMatchers.some((matcher) => matcher(origin));
+};
 app.use(
     cors({
         origin: (origin, callback) => {
-            if (!origin || allowedOrigins.includes(origin)) {
+            if (isAllowedOrigin(origin)) {
                 return callback(null, true);
             }
             const error = new Error('Not allowed by CORS');
@@ -31,7 +77,7 @@ app.use(
         },
         credentials: true,
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-        allowedHeaders: ['Content-Type', 'Authorization']
+        allowedHeaders: ['Content-Type', 'Authorization', 'X-Custom-Header']
     })
 );
 
