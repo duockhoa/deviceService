@@ -216,6 +216,7 @@ const createAsset = async (req, res) => {
             team_id,
             area_id,
             asset_code,
+            dk_code,
             name,
             status,
             // General info object
@@ -223,6 +224,11 @@ const createAsset = async (req, res) => {
             // Components array
             components = []
         } = req.body;
+        const normalizedDkCode = typeof dk_code === 'string'
+            ? dk_code.trim() || null
+            : dk_code
+                ? dk_code.toString().trim() || null
+                : null;
 
         // Validation cơ bản
         if (!sub_category_id || !asset_code || !name) {
@@ -262,6 +268,7 @@ const createAsset = async (req, res) => {
             team_id,
             area_id,
             asset_code,
+            dk_code: normalizedDkCode,
             name,
             status: status || 'active',
             created_by: req.user.id
@@ -372,6 +379,9 @@ const updateAsset = async (req, res) => {
     try {
         const { id } = req.params;
         const { generalInfo, components, ...assetData } = req.body;
+        if (assetData.dk_code !== undefined) {
+            assetData.dk_code = assetData.dk_code ? assetData.dk_code.toString().trim() : null;
+        }
         
         const asset = await Assets.findByPk(id);
 
@@ -750,6 +760,7 @@ const searchAssets = async (req, res) => {
             whereCondition = {
                 [require('sequelize').Op.or]: [
                     { name: { [require('sequelize').Op.like]: `%${query}%` } },
+                    { dk_code: { [require('sequelize').Op.like]: `%${query}%` } },
                     { asset_code: { [require('sequelize').Op.like]: `%${query}%` } },
                     { description: { [require('sequelize').Op.like]: `%${query}%` } }
                 ]
@@ -873,6 +884,7 @@ const exportTemplate = async (req, res) => {
         const templateData = [
             {
                 'Mã thiết bị (*)': 'TB-001',
+                'Mã DK (tùy chọn)': 'DK-001',
                 'Tên thiết bị (*)': 'Máy nén khí',
                 'Mã danh mục phụ (*)': subCategories[0]?.code || '',
                 'Khu vực (mã)': areas[0]?.code || '',
@@ -1235,6 +1247,7 @@ const importFromExcel = async (req, res) => {
                 // Create asset
                 const asset = await Assets.create({
                     asset_code: row['Mã thiết bị (*)'],
+                    dk_code: row['Mã DK (tùy chọn)'] || row['Mã DK'] || null,
                     name: row['Tên thiết bị (*)'],
                     sub_category_id: subCat.id,
                     area_id: area_id,

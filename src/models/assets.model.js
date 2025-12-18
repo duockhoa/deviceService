@@ -38,6 +38,11 @@ const Assets = sequelize.define('assets', {
         allowNull: false,
         unique: true
     },
+    dk_code: {
+        type: DataTypes.STRING(64),
+        allowNull: true,
+        comment: 'Mã DK nội bộ, tùy chọn'
+    },
     name: {
         type: DataTypes.STRING(255),
         allowNull: false
@@ -109,6 +114,9 @@ const Assets = sequelize.define('assets', {
         },
         {
             fields: ['status']
+        },
+        {
+            fields: ['dk_code']
         }
     ]
 });
