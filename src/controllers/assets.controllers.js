@@ -979,10 +979,22 @@ const exportTemplate = async (req, res) => {
         // Sheet 1: Thông tin chung thiết bị
         const ws = XLSX.utils.json_to_sheet(templateData);
         ws['!cols'] = [
-            { wch: 20 }, { wch: 30 }, { wch: 20 }, { wch: 15 }, 
-            { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 25 },
-            { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 25 },
-            { wch: 20 }, { wch: 25 }, { wch: 40 }
+            { wch: 20 }, // Mã thiết bị
+            { wch: 20 }, // Mã DK (tùy chọn)
+            { wch: 30 }, // Tên thiết bị
+            { wch: 20 }, // Mã danh mục phụ
+            { wch: 15 }, // Khu vực
+            { wch: 20 }, // Phòng ban
+            { wch: 15 }, // Trạng thái
+            { wch: 15 }, // Năm sản xuất
+            { wch: 25 }, // Nhà sản xuất
+            { wch: 15 }, // Xuất xứ
+            { wch: 15 }, // Model
+            { wch: 20 }, // Serial
+            { wch: 25 }, // Thời hạn BH
+            { wch: 20 }, // Ngày hết BH
+            { wch: 25 }, // Nhà cung cấp
+            { wch: 40 }  // Mô tả
         ];
         XLSX.utils.book_append_sheet(wb, ws, 'Thông tin thiết bị');
 
@@ -1016,6 +1028,7 @@ const exportTemplate = async (req, res) => {
             { 'Nội dung': '1. SHEET "Thông tin thiết bị":' },
             { 'Nội dung': '   - Điền thông tin cơ bản của thiết bị' },
             { 'Nội dung': '   - Các cột có dấu (*) là bắt buộc' },
+            { 'Nội dung': '   - Cột \"Mã DK (tùy chọn)\": mã nội bộ để chọn thiết bị trong kế hoạch bảo trì; có thể bỏ trống nếu chưa dùng' },
             { 'Nội dung': '   - Mã thiết bị phải duy nhất, không trùng lặp' },
             { 'Nội dung': '' },
             { 'Nội dung': '2. SHEET "Thành phần cấu tạo":' },
