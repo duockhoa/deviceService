@@ -23,6 +23,7 @@ const handoversRouter = require('./handovers.router');
 const checklistTemplateRouter = require('./maintenanceChecklistTemplate.router');
 const rbacRouter = require('./rbac.router');
 const reportsRouter = require('./reports.router');
+const oeeRouter = require('./oee.router');
 const { seedRBAC } = require('../controllers/rbac.controllers');
 const { permissionGuard } = require('../middleware/permissionGuard');
 
@@ -59,6 +60,7 @@ router.use('/rbac', permissionGuard('rbac.manage'), rbacRouter); // Phân quyề
 router.use('/scheduler', schedulerRouter); // Scheduled jobs testing & status
 router.use('/assets', assetsRouter);
 router.use('/reports', permissionGuard('maintenance.report'), reportsRouter);
+router.use('/oee', permissionGuard('maintenance.report'), oeeRouter);
 
 
 module.exports = router;

@@ -1,5 +1,7 @@
 const { Op } = require('sequelize');
 const { Incidents, Maintenance, Assets, AssetSubCategories, AssetCategories, Areas, Plants } = require('../models');
+const { listStoredBatches, toNumber } = require('../service/oeeImport.service');
+const { normalizeCode } = require('../utils/normalize');
 
 const parseDateRange = (from, to) => {
     const range = {};
@@ -16,6 +18,55 @@ const parseDateRange = (from, to) => {
         }
     }
     return Object.keys(range).length > 0 ? range : null;
+};
+
+const enforceDateRangeLimit = (from, to, maxDays = 185) => {
+    if (!from || !to) return null;
+    const start = new Date(from);
+    const end = new Date(to);
+    if (isNaN(start) || isNaN(end)) return null;
+    const diffDays = (end - start) / (1000 * 60 * 60 * 24);
+    return diffDays > maxDays ? { tooWide: true, diffDays } : null;
+};
+
+const loadImportOeeRows = async ({ from, to, assetIds = new Set(), normalizedCode }) => {
+    const batches = listStoredBatches();
+    if (!batches.length) return [];
+    const start = from ? new Date(from) : null;
+    const end = to ? new Date(to) : null;
+    const rows = [];
+    batches.forEach((batch) => {
+        const src = batch?.source_rows || [];
+        const results = batch?.rows || [];
+        // Map row_index -> asset_id from results
+        const assetByIndex = new Map();
+        results.forEach((r) => {
+            assetByIndex.set(r.row_index, r.asset_id);
+        });
+        src.forEach((r, idx) => {
+            const assetId = assetByIndex.get(idx) || null;
+            const code = normalizeCode(r.dk_code || r.asset_code);
+            if (normalizedCode && code !== normalizedCode) return;
+            if (assetIds.size && !assetIds.has(assetId)) return;
+            const d = r.date ? new Date(r.date) : null;
+            if (start && d && d < start) return;
+            if (end && d && d > end) return;
+            rows.push({ ...r, asset_id: assetId, normalized_code: code });
+        });
+    });
+    return rows;
+};
+
+const sumImportDowntimeMinutes = (row) => {
+    return (
+        (toNumber(row.downtime_unplanned_breakdown_minutes) || 0) +
+        (toNumber(row.downtime_setup_changeover_minutes) || 0) +
+        (toNumber(row.downtime_planned_maintenance_minutes) || 0) +
+        (toNumber(row.downtime_unplanned_maintenance_minutes) || 0) +
+        (toNumber(row.downtime_material_wait_minutes) || 0) +
+        (toNumber(row.downtime_quality_hold_minutes) || 0) +
+        (toNumber(row.downtime_other_minutes) || 0)
+    );
 };
 
 const buildIncidentQuery = (filters = {}) => {
@@ -118,6 +169,10 @@ const calculateMtbf = (incidents = []) => {
 const getMtbfReport = async (req, res) => {
     try {
         const { from, to, dk_code, asset_id, area_id, category_id } = req.query;
+        const rangeIssue = enforceDateRangeLimit(from, to);
+        if (rangeIssue?.tooWide) {
+            return res.status(400).json({ success: false, message: 'Date range too wide, please limit to 185 days' });
+        }
         const dateRange = parseDateRange(from, to);
         const { incidentWhere, assetWhere, assetIncludes } = buildIncidentQuery({ dk_code, asset_id, area_id, category_id });
 
@@ -179,6 +234,10 @@ const getMtbfReport = async (req, res) => {
 const getOeeReport = async (req, res) => {
     try {
         const { from, to, dk_code, asset_id, area_id, category_id, planned_hours } = req.query;
+        const rangeIssue = enforceDateRangeLimit(from, to);
+        if (rangeIssue?.tooWide) {
+            return res.status(400).json({ success: false, message: 'Date range too wide, please limit to 185 days' });
+        }
         const dateRange = parseDateRange(from, to);
         const { incidentWhere, assetWhere, assetIncludes } = buildIncidentQuery({ dk_code, asset_id, area_id, category_id });
 
@@ -186,31 +245,59 @@ const getOeeReport = async (req, res) => {
             incidentWhere.reported_date = dateRange;
         }
 
-        const incidents = await Incidents.findAll({
-            where: incidentWhere,
-            include: [{
-                model: Assets,
-                as: 'asset',
-                required: true,
-                where: assetWhere,
-                include: assetIncludes
-            }]
-        });
-
-        const downtime_hours = incidents.reduce((sum, i) => {
-            const val = i.downtime_hours != null ? Number(i.downtime_hours) : 0;
-            return sum + (isNaN(val) ? 0 : val);
-        }, 0);
-
         const parsedPlanned = planned_hours !== undefined ? parseFloat(planned_hours) : null;
         const planned = Number.isFinite(parsedPlanned) ? parsedPlanned : null;
         let status = 'ok';
         let availability = null;
+        let downtime_hours = 0;
 
-        if (!planned || planned <= 0) {
-            status = 'insufficient_data';
+        // Prefer imported OEE data if available
+        const normalizedCode = normalizeCode(dk_code || null);
+        let assetIdsFilter = new Set();
+        if (asset_id) assetIdsFilter.add(Number(asset_id));
+        // If filter by area/category, fetch asset ids
+        if (area_id || category_id) {
+            const assetIds = await Assets.findAll({
+                where: assetWhere,
+                include: assetIncludes,
+                attributes: ['id']
+            });
+            assetIds.forEach((a) => assetIdsFilter.add(a.id));
+        }
+
+        const importRows = await loadImportOeeRows({ from, to, assetIds: assetIdsFilter, normalizedCode });
+
+        if (importRows.length) {
+            const totalDowntimeMinutes = importRows.reduce((sum, row) => sum + sumImportDowntimeMinutes(row), 0);
+            downtime_hours = totalDowntimeMinutes / 60;
+            if (!planned || planned <= 0) {
+                status = 'insufficient_data';
+            } else {
+                availability = Number(Math.max(0, Math.min(1, (planned - downtime_hours) / planned)).toFixed(4));
+            }
         } else {
-            availability = Number(Math.max(0, Math.min(1, (planned - downtime_hours) / planned)).toFixed(4));
+            // Fallback to incidents downtime
+            const incidents = await Incidents.findAll({
+                where: incidentWhere,
+                include: [{
+                    model: Assets,
+                    as: 'asset',
+                    required: true,
+                    where: assetWhere,
+                    include: assetIncludes
+                }]
+            });
+
+            downtime_hours = incidents.reduce((sum, i) => {
+                const val = i.downtime_hours != null ? Number(i.downtime_hours) : 0;
+                return sum + (isNaN(val) ? 0 : val);
+            }, 0);
+
+            if (!planned || planned <= 0) {
+                status = 'insufficient_data';
+            } else {
+                availability = Number(Math.max(0, Math.min(1, (planned - downtime_hours) / planned)).toFixed(4));
+            }
         }
 
         return res.status(200).json({
@@ -222,7 +309,8 @@ const getOeeReport = async (req, res) => {
                 performance: null,
                 quality: null,
                 oee: availability,
-                status
+                status,
+                source: importRows.length ? 'import_oee' : 'incidents'
             }
         });
     } catch (error) {
