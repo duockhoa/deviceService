@@ -21,14 +21,22 @@ const {
     getAssetByDkCode,
     getAssetConsumables,        // Lấy vật tư tiêu hao
     exportTemplate,
-    importFromExcel
+    exportSpecTemplate,
+    exportConsumableTemplate,
+    importFromExcel,
+    importAssetSpecificationsFromExcel,
+    importAssetConsumablesFromExcel
 } = require("../controllers/assets.controllers");
 
 // CRUD routes with permission guards
 router.get('/',getAllAssets);
 router.get('/search',searchAssets);
 router.get('/export/template',exportTemplate);
+router.get('/export/template/spec', exportSpecTemplate);
+router.get('/export/template/consumable', exportConsumableTemplate);
 router.post('/import/excel', upload.single('file'),importFromExcel);
+router.post('/import/specifications', upload.single('file'), importAssetSpecificationsFromExcel);
+router.post('/import/consumables', upload.single('file'), importAssetConsumablesFromExcel);
 router.get('/by-code/:assetCode',getAssetByCode);
 router.get('/by-dk/:dkCode',getAssetByDkCode);
 router.get('/by-area/:areaId',getAssetsByArea);

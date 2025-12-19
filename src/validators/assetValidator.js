@@ -3,7 +3,7 @@ const Joi = require('joi');
 const statusEnum = ['active', 'inactive', 'maintenance', 'retired'];
 
 const baseSchema = {
-    asset_code: Joi.string().min(1).max(50),
+    asset_code: Joi.string().min(1).max(50).allow('', null),
     dk_code: Joi.string().max(64).allow('', null),
     name: Joi.string().min(3).max(255),
     sub_category_id: Joi.number().integer().positive(),
@@ -18,7 +18,7 @@ const baseSchema = {
 
 const createAssetSchema = Joi.object({
     ...baseSchema,
-    asset_code: baseSchema.asset_code.required(),
+    asset_code: baseSchema.asset_code, // sẽ auto-generate nếu không gửi
     name: baseSchema.name.required(),
     sub_category_id: baseSchema.sub_category_id.required(),
     status: baseSchema.status.default('active')

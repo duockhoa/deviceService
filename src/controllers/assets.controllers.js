@@ -3,6 +3,20 @@ const { Assets, AssetCategories, AssetSubCategories, User, Departments, Areas, P
 const  sequelize  = require('../configs/sequelize');
 const XLSX = require('xlsx');
 
+// Helper: sinh asset_code dạng TB-YYYYMMDD-HHMMSS-XXX (retry tránh trùng)
+const generateAssetCode = async () => {
+    const pad = (n) => String(n).padStart(2, '0');
+    const randomSuffix = () => Math.random().toString(36).slice(-3).toUpperCase();
+
+    for (let i = 0; i < 5; i++) {
+        const d = new Date();
+        const code = `TB-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}-${randomSuffix()}`;
+        const exists = await Assets.findOne({ where: { asset_code: code } });
+        if (!exists) return code;
+    }
+    throw new Error('Không thể sinh asset_code duy nhất sau 5 lần thử');
+};
+
 
 // GET /api/assets - Lấy tất cả assets
 const getAllAssets = async (req, res) => {
@@ -20,223 +34,106 @@ const getAllAssets = async (req, res) => {
                 { model: User, as: 'Creator', attributes: ['id', 'name', 'employee_code'] },
                 { model: Departments, as: 'Department', attributes: ['name', 'description'] },
                 {
-                    model: Areas,
-                    as: 'Area',
-                    attributes: ['id', 'code', 'name', 'description'],
-                    include: [
-                        {
-                            model: Plants,
-                            as: 'Plant',
-                            attributes: ['id', 'code', 'name', 'description']
+                    // GET /api/assets/export/template - Export Asset template (asset_code auto-generated)
+                    const exportTemplate = async (req, res) => {
+                        try {
+                            const [subCategories, areas, departments] = await Promise.all([
+                                AssetSubCategories.findAll({ attributes: ['code', 'name'] }),
+                                Areas.findAll({ attributes: ['code', 'name'] }),
+                                Departments.findAll({ attributes: ['name'] })
+                            ]);
+
+                            const wb = XLSX.utils.book_new();
+
+                            // Sheet 1: Asset data (no asset_code column)
+                            const assetSheet = [{
+                                'Tên thiết bị (*)': '',
+                                'dk_code (tùy chọn, có thể trùng)': '',
+                                'Loại thiết bị (mã hoặc tên) (*)': '',
+                                'Khu vực (mã hoặc tên)': '',
+                                'Bộ phận (tên)': '',
+                                'Model': '',
+                                'Serial': '',
+                                'Ngày sử dụng (YYYY-MM-DD)': '',
+                                'Ghi chú': ''
+                            }];
+                            const wsAsset = XLSX.utils.json_to_sheet(assetSheet);
+                            wsAsset['!cols'] = [
+                                { wch: 28 }, // Tên thiết bị
+                                { wch: 24 }, // dk_code
+                                { wch: 30 }, // Loại thiết bị
+                                { wch: 22 }, // Khu vực
+                                { wch: 22 }, // Bộ phận
+                                { wch: 18 }, // Model
+                                { wch: 18 }, // Serial
+                                { wch: 24 }, // Ngày sử dụng
+                                { wch: 30 }  // Ghi chú
+                            ];
+                            XLSX.utils.book_append_sheet(wb, wsAsset, 'Thông tin thiết bị');
+
+                            // Sheet 2: Instructions
+                            const instructions = [
+                                { 'Nội dung': 'HƯỚNG DẪN IMPORT THIẾT BỊ' },
+                                { 'Nội dung': '' },
+                                { 'Nội dung': 'Mã thiết bị hệ thống (asset_code) sẽ được tự sinh.' },
+                                { 'Nội dung': 'Mã DK là mã nội bộ, có thể trùng.' },
+                                { 'Nội dung': '' },
+                                { 'Nội dung': 'Cột bắt buộc: Tên thiết bị, Loại thiết bị (mã hoặc tên).' },
+                                { 'Nội dung': 'Khu vực nhập mã hoặc tên; Bộ phận nhập đúng tên.' },
+                                { 'Nội dung': 'Định dạng ngày: YYYY-MM-DD (ví dụ 2025-12-31).' }
+                            ];
+                            const wsInstructions = XLSX.utils.json_to_sheet(instructions);
+                            wsInstructions['!cols'] = [{ wch: 90 }];
+                            XLSX.utils.book_append_sheet(wb, wsInstructions, 'Hướng dẫn');
+
+                            // Sheet 3: Loại thiết bị reference
+                            const subCatData = subCategories.map(sc => ({
+                                'Mã': sc.code,
+                                'Tên': sc.name
+                            }));
+                            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(subCatData), 'Loại thiết bị');
+
+                            // Sheet 4: Khu vực reference
+                            const areaData = areas.map(a => ({ 'Mã': a.code, 'Tên': a.name }));
+                            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(areaData), 'Khu vực');
+
+                            // Sheet 5: Bộ phận reference
+                            const deptData = departments.map(d => ({ 'Tên bộ phận': d.name }));
+                            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(deptData), 'Bộ phận');
+
+                            const excelBuffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+                            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+                            res.setHeader('Content-Disposition', 'attachment; filename=Template_Thiet_Bi.xlsx');
+                            return res.send(excelBuffer);
+                        } catch (error) {
+                            console.error('Error exporting template:', error);
+                            res.status(500).json({
+                                success: false,
+                                message: 'Lỗi khi export template',
+                                error: error.message
+                            });
                         }
-                    ]
-                },
-                // FIX: Include Components với fields đúng model
-                {
-                    model: AssetComponent,
-                    as: 'Components',
-                    attributes: ['id', 'component_name', 'component_code', 'specification', 'quantity', 'unit', 'remarks']
-                }
-            ],
-            order: [['created_at', 'DESC']]
-        });
-
-        res.status(200).json({
-            success: true,
-            data: assets,
-            count: assets.length
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Error fetching assets',
-            error: error.message
-        });
-    }
-};
-
-// GET /api/assets/:id - Lấy asset theo ID
-const getAssetById = async (req, res) => {
-    try {
-        const { id } = req.params;
-        console.log('getAssetById called for ID:', id);
-        const asset = await Assets.findByPk(id, {
-            include: [
-                {
-                    model: AssetSubCategories,
-                    as: 'SubCategory',
-                    include: [{
-                        model: AssetCategories,
-                        as: 'Category',
-                        attributes: ['id', 'code', 'name', 'description']
-                    }]
-                },
-                {
-                    model: User,
-                    as: 'Creator',
-                    attributes: ['id', 'name', 'employee_code', 'email']
-                },
-                {
-                    model: Departments,
-                    as: 'Department',
-                    attributes: ['name', 'description', 'team_leader']
-                },
-                {
-                    model: Areas,
-                    as: 'Area',
-                    attributes: ['id', 'code', 'name', 'description'],
-                    include: [
-                        {
-                            model: Plants,
-                            as: 'Plant',
-                            attributes: ['id', 'code', 'name', 'description']
-                        }
-                    ]
-                },
-                {
-                    model: AssetGeneralInfo,
-                    as: 'GeneralInfo',
-                    attributes: [
-                        'manufacture_year',
-                        'manufacturer',
-                        'country_of_origin',
-                        'model',
-                        'serial_number',
-                        'warranty_expiry_date',
-                        'warranty_period_months',
-                        'supplier',
-                        'description'
-                    ]
-                },
-                // Include Components
-                {
-                    model: AssetComponent,
-                    as: 'Components',
-                    attributes: [
-                        'id', 
-                        'component_name',
-                        'component_code',
-                        'specification',
-                        'quantity', 
-                        'unit',  
-                        'remarks',
-                        'created_at',
-                        'updated_at'
-                    ]
-                },
-                // Include Specifications
-                {
-                    model: AssetSpecifications,
-                    as: 'Specifications',
-                    attributes: [
-                        'id',
-                        'spec_category_id',
-                        'value',
-                        'numeric_value',
-                        'remarks',
-                        'verified_at',
-                        'verified_by'
-                    ],
-                    include: [
-                        {
-                            model: SpecificationCategories,
-                            as: 'SpecCategory',
-                            attributes: ['id', 'spec_code', 'spec_name', 'unit', 'data_type']
-                        }
-                    ]
-                },
-                // Include Attachments
-                {
-                    model: AssetAttachment,
-                    as: 'Attachments',
-                    attributes: [
-                        'id',
-                        'file_name',
-                        'file_path',
-                        'file_type',
-                        'file_size',
-                        'description',
-                        'uploaded_by',
-                        'uploaded_at'
-                    ]
-                },
-                // Include Consumables
-                {
-                    model: AssetConsumables,
-                    as: 'Consumables',
-                    attributes: [
-                        'id',
-                        'item_name',
-                        'specification',
-                        'unit',
-                        'replacement_cycle',
-                        'unit_price',
-                        'supplier',
-                        'remarks'
-                    ]
-                }
-            ]
-        });
-
-        if (!asset) {
-            console.log('Asset not found for ID:', id);
-            return res.status(404).json({
-                success: false,
-                message: 'Asset not found'
-            });
-        }
-
-        console.log('Asset found, returning data for ID:', id);
-        res.status(200).json({
-            success: true,
-            data: asset
-        });
-    } catch (error) {
-        console.error('Error in getAssetById for ID:', req.params.id);
-        console.error('Error name:', error.name);
-        console.error('Error message:', error.message);
-        console.error('Error SQL:', error.sql);
-        console.error('Full error:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
-        console.error('Error stack:', error.stack);
-        res.status(500).json({
-            success: false,
-            message: 'Error fetching asset',
-            error: error.message || error.toString()
-        });
-    }
-};
-
-// POST /api/assets - Tạo asset mới (bao gồm general info và components)
-const createAsset = async (req, res) => {
-    const t = await sequelize.transaction();
-    
-    try {
-        const {
-            // Basic asset info
-            sub_category_id,
-            team_id,
-            area_id,
-            asset_code,
-            dk_code,
-            name,
-            status,
-            // General info object
-            generalInfo,
-            // Components array
-            components = []
-        } = req.body;
-        const normalizedDkCode = typeof dk_code === 'string'
-            ? dk_code.trim().toUpperCase() || null
-            : dk_code
-                ? dk_code.toString().trim().toUpperCase() || null
-                : null;
-
-        // Validation cơ bản
-        if (!sub_category_id || !asset_code || !name) {
+                    };
             await t.rollback();
             return res.status(400).json({
                 success: false,
-                message: 'Sub Category ID, Asset Code, and Name are required'
+                message: 'Sub Category ID and Name are required'
+            });
+        }
+
+        // Auto-generate asset_code nếu không gửi hoặc rỗng
+        let finalAssetCode = asset_code && asset_code.trim() ? asset_code.trim().toUpperCase() : null;
+        if (!finalAssetCode) {
+            finalAssetCode = await generateAssetCode();
+        }
+
+        // Đảm bảo không trùng asset_code
+        const existing = await Assets.findOne({ where: { asset_code: finalAssetCode } });
+        if (existing) {
+            await t.rollback();
+            return res.status(409).json({
+                success: false,
+                message: 'Asset code already exists'
             });
         }
 
@@ -250,39 +147,12 @@ const createAsset = async (req, res) => {
             });
         }
 
-        // Kiểm tra asset_code đã tồn tại chưa
-        const existingAsset = await Assets.findOne({
-            where: { asset_code }
-        });
-
-        if (existingAsset) {
-            await t.rollback();
-            return res.status(409).json({
-                success: false,
-            message: 'Asset code already exists'
-        });
-        }
-
-        // Soft check dk_code trùng (nếu có)
-        if (normalizedDkCode) {
-            const existingDk = await Assets.findOne({
-                where: { dk_code: normalizedDkCode }
-            });
-            if (existingDk) {
-                await t.rollback();
-                return res.status(409).json({
-                    success: false,
-                    message: 'DK code already exists'
-                });
-            }
-        }
-
         // Tạo asset cơ bản
         const assetData = {
             sub_category_id,
             team_id,
             area_id,
-            asset_code,
+            asset_code: finalAssetCode,
             dk_code: normalizedDkCode,
             name,
             status: status || 'active',
@@ -1143,6 +1013,82 @@ const exportTemplate = async (req, res) => {
     }
 };
 
+// GET /api/assets/export/template/spec - Export Spec template
+const exportSpecTemplate = async (req, res) => {
+    try {
+        const specCategories = await SpecificationCategories.findAll({
+            attributes: ['spec_code', 'spec_name', 'unit', 'data_type'],
+            order: [['spec_code', 'ASC']]
+        });
+
+        const wb = XLSX.utils.book_new();
+        const data = [{
+            'asset_code (*)': '',
+            'Tên thông số (*)': '',
+            'Giá trị': '',
+            'Đơn vị': '',
+            'Ghi chú': ''
+        }];
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), 'Thông số');
+
+        const instructions = [
+            { 'Nội dung': 'IMPORT THÔNG SỐ' },
+            { 'Nội dung': 'Bắt buộc: asset_code, Tên thông số.' },
+            { 'Nội dung': 'Chỉ map theo asset_code (không dùng dk_code).' },
+            { 'Nội dung': 'Không tự tạo thiết bị nếu không tìm thấy asset_code.' }
+        ];
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(instructions), 'Hướng dẫn');
+
+        const specRef = specCategories.map(sc => ({
+            'Mã thông số': sc.spec_code,
+            'Tên thông số': sc.spec_name,
+            'Đơn vị': sc.unit || '',
+            'Kiểu dữ liệu': sc.data_type
+        }));
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(specRef), 'Danh mục thông số');
+
+        const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename=Template_Thong_So.xlsx');
+        return res.send(buffer);
+    } catch (error) {
+        console.error('Error exporting spec template:', error);
+        res.status(500).json({ success: false, message: 'Lỗi khi export template thông số', error: error.message });
+    }
+};
+
+// GET /api/assets/export/template/consumable - Export Consumable template
+const exportConsumableTemplate = async (req, res) => {
+    try {
+        const wb = XLSX.utils.book_new();
+        const data = [{
+            'asset_code (*)': '',
+            'Tên vật tư (*)': '',
+            'Định mức': '',
+            'Chu kỳ': '',
+            'Đơn vị': '',
+            'Ghi chú': ''
+        }];
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), 'Vật tư tiêu hao');
+
+        const instructions = [
+            { 'Nội dung': 'IMPORT VẬT TƯ TIÊU HAO' },
+            { 'Nội dung': 'Bắt buộc: asset_code, Tên vật tư.' },
+            { 'Nội dung': 'Chỉ map theo asset_code (không dùng dk_code).' },
+            { 'Nội dung': 'Không tự tạo thiết bị nếu không tìm thấy asset_code.' }
+        ];
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(instructions), 'Hướng dẫn');
+
+        const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename=Template_Vat_Tu.xlsx');
+        return res.send(buffer);
+    } catch (error) {
+        console.error('Error exporting consumable template:', error);
+        res.status(500).json({ success: false, message: 'Lỗi khi export template vật tư', error: error.message });
+    }
+};
+
 // POST /api/assets/import/excel - Import Excel data
 const importFromExcel = async (req, res) => {
     const t = await sequelize.transaction();
@@ -1197,18 +1143,6 @@ const importFromExcel = async (req, res) => {
         const mainSheet = workbook.Sheets[mainSheetName];
         const mainData = XLSX.utils.sheet_to_json(mainSheet);
 
-        // Read components sheet if exists
-        const componentsSheetName = workbook.SheetNames.find(name => name.includes('Thành phần'));
-        const componentsData = componentsSheetName ? XLSX.utils.sheet_to_json(workbook.Sheets[componentsSheetName]) : [];
-
-        // Read consumables sheet if exists
-        const consumablesSheetName = workbook.SheetNames.find(name => name.includes('Vật tư'));
-        const consumablesData = consumablesSheetName ? XLSX.utils.sheet_to_json(workbook.Sheets[consumablesSheetName]) : [];
-
-        // Read specifications sheet if exists
-        const specificationsSheetName = workbook.SheetNames.find(name => name.includes('Thông số'));
-        const specificationsData = specificationsSheetName ? XLSX.utils.sheet_to_json(workbook.Sheets[specificationsSheetName]) : [];
-
         if (mainData.length === 0) {
             return res.status(400).json({
                 success: false,
@@ -1226,63 +1160,87 @@ const importFromExcel = async (req, res) => {
         const subCategories = await AssetSubCategories.findAll();
         const areas = await Areas.findAll();
         const departments = await Departments.findAll();
-        const specCategories = await SpecificationCategories.findAll();
-
         // Process each row
         for (let i = 0; i < mainData.length; i++) {
             const row = mainData[i];
             const rowNum = i + 2; // Excel row number (starting from 2, after header)
 
             try {
-                // Validate required fields
-                if (!row['Mã thiết bị (*)'] || !row['Tên thiết bị (*)'] || !row['Mã danh mục phụ (*)']) {
+                // Validate required fields (asset_code optional: sẽ auto-generate)
+                const assetName = row['Tên thiết bị'] || row['Tên thiết bị (*)'];
+                const subCatCodeOrName = row['Loại thiết bị'] || row['Loại thiết bị (mã)'];
+
+                if (!assetName || !subCatCodeOrName) {
                     results.errors.push({
                         row: rowNum,
-                        error: 'Thiếu thông tin bắt buộc (Mã thiết bị, Tên thiết bị, Mã danh mục phụ)'
+                        error: 'Thiếu thông tin bắt buộc (Tên thiết bị, Loại thiết bị)'
                     });
                     continue;
                 }
 
-                const assetCode = row['Mã thiết bị (*)'];
+                const providedAssetCode = row['asset_code'] || row['Mã thiết bị'] || row['Mã thiết bị (*)'] || null;
+                const normalizedAssetCode = providedAssetCode && providedAssetCode.toString().trim() !== ''
+                    ? providedAssetCode.toString().trim().toUpperCase()
+                    : null;
 
-                // Find sub_category_id
-                const subCat = subCategories.find(sc => sc.code === row['Mã danh mục phụ (*)']);
+                const rawDkCode = row['dk_code'] || row['DK Code'] || row['Mã DK'] || row['Mã DK (tùy chọn)'];
+                const finalDkCode = rawDkCode
+                    ? rawDkCode.toString().trim().toUpperCase() || null
+                    : null;
+
+                // Find sub_category_id by code or name (case-insensitive)
+                const subCatLookup = subCatCodeOrName.toString().trim().toUpperCase();
+                const subCat = subCategories.find(sc =>
+                    sc.code?.toUpperCase() === subCatLookup ||
+                    sc.name?.toUpperCase() === subCatLookup
+                );
                 if (!subCat) {
                     results.errors.push({
                         row: rowNum,
-                        error: `Không tìm thấy danh mục phụ với mã: ${row['Mã danh mục phụ (*)']}`
+                        error: `Không tìm thấy loại thiết bị: ${subCatCodeOrName}`
                     });
                     continue;
                 }
 
-                // Find area_id (optional)
+                // Find area_id (optional) by code or name
                 let area_id = null;
-                if (row['Khu vực (mã)']) {
-                    const area = areas.find(a => a.code === row['Khu vực (mã)']);
+                const areaValue = row['Khu vực'] || row['Khu vực (mã)'];
+                if (areaValue) {
+                    const area = areas.find(a =>
+                        a.code?.toUpperCase() === areaValue.toString().trim().toUpperCase() ||
+                        a.name?.toUpperCase() === areaValue.toString().trim().toUpperCase()
+                    );
                     if (area) {
                         area_id = area.id;
                     }
                 }
 
-                // Find team_id (optional)
+                // Find team_id (optional) by name
                 let team_id = null;
-                if (row['Phòng ban']) {
-                    const dept = departments.find(d => d.name === row['Phòng ban']);
+                const teamValue = row['Bộ phận'];
+                if (teamValue) {
+                    const dept = departments.find(d => d.name?.toUpperCase() === teamValue.toString().trim().toUpperCase());
                     if (dept) {
                         team_id = dept.name;
                     }
                 }
 
+                // Resolve final asset_code (auto-generate if missing)
+                let finalAssetCode = normalizedAssetCode;
+                if (!finalAssetCode) {
+                    finalAssetCode = await generateAssetCode();
+                }
+
                 // Check if asset_code already exists
                 const existingAsset = await Assets.findOne({
-                    where: { asset_code: row['Mã thiết bị (*)'] }
+                    where: { asset_code: finalAssetCode }
                 });
 
                 if (existingAsset) {
                     results.skipped.push({
                         row: rowNum,
-                        asset_code: assetCode,
-                        name: row['Tên thiết bị (*)'],
+                        asset_code: finalAssetCode,
+                        name: assetName,
                         reason: `Mã thiết bị đã tồn tại trong hệ thống`
                     });
                     continue;
@@ -1290,116 +1248,32 @@ const importFromExcel = async (req, res) => {
 
                 // Create asset
                 const asset = await Assets.create({
-                    asset_code: row['Mã thiết bị (*)'],
-                    dk_code: row['Mã DK (tùy chọn)'] || row['Mã DK'] || null,
-                    name: row['Tên thiết bị (*)'],
+                    asset_code: finalAssetCode,
+                    dk_code: finalDkCode,
+                    name: assetName,
                     sub_category_id: subCat.id,
                     area_id: area_id,
                     team_id: team_id,
-                    status: row['Trạng thái'] || 'active',
+                    description: row['Ghi chú'] || null,
+                    status: 'active',
                     created_by: req.user?.id
                 }, { transaction: t });
 
                 // Create general info if provided
-                if (row['Năm sản xuất'] || row['Nhà sản xuất'] || row['Model']) {
+                const usageDate = excelDateToMySQL(row['Ngày sử dụng']);
+                if (usageDate || row['Model'] || row['Serial']) {
                     await AssetGeneralInfo.create({
                         asset_id: asset.id,
-                        manufacture_year: row['Năm sản xuất'] ? parseInt(row['Năm sản xuất']) : null,
-                        manufacturer: row['Nhà sản xuất'] || null,
-                        country_of_origin: row['Xuất xứ'] || null,
                         model: row['Model'] || null,
-                        serial_number: row['Serial number'] || null,
-                        warranty_period_months: row['Thời hạn bảo hành (tháng)'] ? parseInt(row['Thời hạn bảo hành (tháng)']) : null,
-                        warranty_expiry_date: excelDateToMySQL(row['Ngày hết bảo hành']),
-                        supplier: row['Nhà cung cấp'] || null,
-                        description: row['Mô tả'] || null
+                        serial_number: row['Serial'] || null,
+                        description: usageDate ? `Ngày sử dụng: ${usageDate}` : null
                     }, { transaction: t });
-                }
-
-                // Create components from components sheet
-                const assetComponents = componentsData.filter(comp => comp['Mã thiết bị (*)'] === assetCode);
-                console.log(`[Import] Asset ${assetCode}: Found ${assetComponents.length} components in sheet`);
-                if (assetComponents.length > 0) {
-                    const componentsToCreate = assetComponents
-                        .filter(comp => comp['Tên thành phần']) // Only create if has name
-                        .map(comp => ({
-                            asset_id: asset.id,
-                            component_name: comp['Tên thành phần'],
-                            component_code: comp['Mã thành phần'] || null,
-                            specification: comp['Thông số kỹ thuật'] || null,
-                            quantity: comp['Số lượng'] ? parseInt(comp['Số lượng']) : null,
-                            unit: comp['Đơn vị'] || null,
-                            remarks: comp['Ghi chú'] || null
-                        }));
-                    
-                    if (componentsToCreate.length > 0) {
-                        await AssetComponent.bulkCreate(componentsToCreate, { transaction: t });
-                        console.log(`[Import] Created ${componentsToCreate.length} components for ${assetCode}`);
-                    }
-                }
-
-                // Create consumables from consumables sheet
-                const assetConsumables = consumablesData.filter(cons => cons['Mã thiết bị (*)'] === assetCode);
-                console.log(`[Import] Asset ${assetCode}: Found ${assetConsumables.length} consumables in sheet`);
-                if (assetConsumables.length > 0) {
-                    const consumablesToCreate = assetConsumables
-                        .filter(cons => cons['Tên vật tư']) // Only create if has name
-                        .map(cons => ({
-                            asset_id: asset.id,
-                            item_name: cons['Tên vật tư'],
-                            specification: cons['Thông số kỹ thuật'] || null,
-                            unit: cons['Đơn vị'] || null,
-                            replacement_cycle: cons['Chu kỳ thay thế (giờ)'] ? parseInt(cons['Chu kỳ thay thế (giờ)']) : null,
-                            unit_price: cons['Đơn giá'] ? parseFloat(cons['Đơn giá']) : null,
-                            supplier: cons['Nhà cung cấp'] || null,
-                            remarks: cons['Ghi chú'] || null
-                        }));
-                    
-                    if (consumablesToCreate.length > 0) {
-                        await AssetConsumables.bulkCreate(consumablesToCreate, { transaction: t });
-                        console.log(`[Import] Created ${consumablesToCreate.length} consumables for ${assetCode}`);
-                    }
-                }
-
-                // Create specifications from specifications sheet
-                const assetSpecifications = specificationsData.filter(spec => spec['Mã thiết bị (*)'] === assetCode);
-                console.log(`[Import] Asset ${assetCode}: Found ${assetSpecifications.length} specifications in sheet`);
-                if (assetSpecifications.length > 0) {
-                    const specificationsToCreate = assetSpecifications
-                        .filter(spec => spec['Mã thông số (*)']) // Only create if has spec code
-                        .map(spec => {
-                            const excelSpecCode = spec['Mã thông số (*)'];
-                            const specCat = specCategories.find(sc => sc.spec_code === excelSpecCode);
-                            if (!specCat) {
-                                console.log(`[Import] WARNING: Spec code "${excelSpecCode}" not found in categories. Available codes:`, specCategories.map(sc => sc.spec_code).join(', '));
-                                return null;
-                            }
-                            
-                            return {
-                                asset_id: asset.id,
-                                spec_category_id: specCat.id,
-                                value: spec['Giá trị'] || null,
-                                numeric_value: spec['Giá trị số'] ? parseFloat(spec['Giá trị số']) : null,
-                                remarks: spec['Ghi chú'] || null
-                            };
-                        })
-                        .filter(spec => spec !== null); // Remove invalid specs
-                    
-                    if (specificationsToCreate.length > 0) {
-                        await AssetSpecifications.bulkCreate(specificationsToCreate, { transaction: t });
-                        console.log(`[Import] Created ${specificationsToCreate.length} specifications for ${assetCode}`);
-                    } else {
-                        console.log(`[Import] No valid specifications to create for ${assetCode} (all spec codes not found)`);
-                    }
                 }
 
                 results.success.push({
                     row: rowNum,
-                    asset_code: assetCode,
-                    name: row['Tên thiết bị (*)'],
-                    components: assetComponents.length,
-                    consumables: assetConsumables.length,
-                    specifications: assetSpecifications.length
+                    asset_code: finalAssetCode,
+                    name: assetName
                 });
 
             } catch (error) {
@@ -1429,6 +1303,209 @@ const importFromExcel = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Lỗi khi import dữ liệu',
+            error: error.message
+        });
+    }
+};
+
+// POST /api/assets/import/specifications - Import specifications for existing assets
+const importAssetSpecificationsFromExcel = async (req, res) => {
+    const t = await sequelize.transaction();
+
+    try {
+        if (!req.file) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng upload file Excel'
+            });
+        }
+
+        const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+        const sheetName = workbook.SheetNames.find(name => name.includes('Thông số')) || workbook.SheetNames[0];
+        const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+
+        if (rows.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Sheet không có dữ liệu'
+            });
+        }
+
+        const assets = await Assets.findAll({ attributes: ['id', 'asset_code'] });
+        const assetMap = new Map(assets.map(a => [a.asset_code.toUpperCase(), a.id]));
+
+        const specCategories = await SpecificationCategories.findAll({ attributes: ['id', 'spec_code', 'spec_name'] });
+        const specCatMap = new Map();
+        specCategories.forEach(sc => {
+            if (sc.spec_code) specCatMap.set(sc.spec_code, sc.id);
+            if (sc.spec_code) specCatMap.set(sc.spec_code.toUpperCase(), sc.id);
+            if (sc.spec_name) specCatMap.set(sc.spec_name, sc.id);
+            if (sc.spec_name) specCatMap.set(sc.spec_name.toUpperCase(), sc.id);
+        });
+
+        const results = { created: 0, updated: 0, errors: [], skipped: [] };
+
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            const rowNum = i + 2; // header at row 1
+
+            try {
+                const assetCodeRaw = row['asset_code (*)'] || row['asset_code'] || row['Mã thiết bị'] || row['Mã thiết bị (*)'];
+                const specNameRaw = row['Tên thông số (*)'] || row['Tên thông số'];
+                const specCodeRaw = row['Mã thông số'] || row['Spec Code'];
+
+                if (!assetCodeRaw || !specNameRaw) {
+                    results.errors.push({ row: rowNum, error: 'Thiếu asset_code hoặc Tên thông số' });
+                    continue;
+                }
+
+                const assetCode = assetCodeRaw.toString().trim().toUpperCase();
+                const specLookup = (specCodeRaw || specNameRaw).toString().trim();
+
+                const assetId = assetMap.get(assetCode);
+                if (!assetId) {
+                    results.errors.push({ row: rowNum, error: `Không tìm thấy thiết bị với mã ${assetCode}` });
+                    continue;
+                }
+
+                const specCatId = specCatMap.get(specLookup) || specCatMap.get(specLookup.toUpperCase());
+                if (!specCatId) {
+                    results.errors.push({ row: rowNum, error: `Không tìm thấy danh mục thông số cho: ${specLookup}` });
+                    continue;
+                }
+
+                const payload = {
+                    asset_id: assetId,
+                    spec_category_id: specCatId,
+                    value: row['Giá trị'] || null,
+                    numeric_value: row['Giá trị số'] ? parseFloat(row['Giá trị số']) : null,
+                    remarks: row['Ghi chú'] || null,
+                    updated_by: req.user?.id || null,
+                    created_by: req.user?.id || null
+                };
+
+                const existing = await AssetSpecifications.findOne({
+                    where: { asset_id: assetId, spec_category_id: specCatId }
+                });
+
+                if (existing) {
+                    await existing.update(payload, { transaction: t });
+                    results.updated += 1;
+                } else {
+                    await AssetSpecifications.create(payload, { transaction: t });
+                    results.created += 1;
+                }
+            } catch (err) {
+                results.errors.push({ row: rowNum, error: err.message || 'Lỗi không xác định' });
+            }
+        }
+
+        await t.commit();
+
+        res.status(200).json({
+            success: true,
+            message: `Import thông số hoàn tất: ${results.created} thêm mới, ${results.updated} cập nhật, ${results.errors.length} lỗi` ,
+            data: results
+        });
+    } catch (error) {
+        await t.rollback();
+        res.status(500).json({
+            success: false,
+            message: 'Lỗi khi import thông số',
+            error: error.message
+        });
+    }
+};
+
+// POST /api/assets/import/consumables - Import consumables for existing assets
+const importAssetConsumablesFromExcel = async (req, res) => {
+    const t = await sequelize.transaction();
+
+    try {
+        if (!req.file) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng upload file Excel'
+            });
+        }
+
+        const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+        const sheetName = workbook.SheetNames.find(name => name.includes('Vật tư')) || workbook.SheetNames[0];
+        const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+
+        if (rows.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Sheet không có dữ liệu'
+            });
+        }
+
+        const assets = await Assets.findAll({ attributes: ['id', 'asset_code'] });
+        const assetMap = new Map(assets.map(a => [a.asset_code.toUpperCase(), a.id]));
+
+        const results = { created: 0, updated: 0, errors: [], skipped: [] };
+
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            const rowNum = i + 2;
+
+            try {
+                const assetCodeRaw = row['asset_code (*)'] || row['asset_code'] || row['Mã thiết bị'] || row['Mã thiết bị (*)'];
+                const itemNameRaw = row['Tên vật tư (*)'] || row['Tên vật tư'] || row['Item Name'];
+
+                if (!assetCodeRaw || !itemNameRaw) {
+                    results.errors.push({ row: rowNum, error: 'Thiếu Mã thiết bị hoặc Tên vật tư' });
+                    continue;
+                }
+
+                const assetCode = assetCodeRaw.toString().trim().toUpperCase();
+                const assetId = assetMap.get(assetCode);
+
+                if (!assetId) {
+                    results.errors.push({ row: rowNum, error: `Không tìm thấy thiết bị với mã ${assetCode}` });
+                    continue;
+                }
+
+                const itemName = itemNameRaw.toString().trim();
+                const payload = {
+                    asset_id: assetId,
+                    item_name: itemName,
+                    specification: row['Định mức'] || null,
+                    unit: row['Đơn vị'] || null,
+                    replacement_cycle: row['Chu kỳ'] ? parseInt(row['Chu kỳ']) : null,
+                    unit_price: null,
+                    supplier: null,
+                    remarks: row['Ghi chú'] || null
+                };
+
+                const existing = await AssetConsumables.findOne({
+                    where: { asset_id: assetId, item_name: itemName }
+                });
+
+                if (existing) {
+                    await existing.update(payload, { transaction: t });
+                    results.updated += 1;
+                } else {
+                    await AssetConsumables.create(payload, { transaction: t });
+                    results.created += 1;
+                }
+            } catch (err) {
+                results.errors.push({ row: rowNum, error: err.message || 'Lỗi không xác định' });
+            }
+        }
+
+        await t.commit();
+
+        res.status(200).json({
+            success: true,
+            message: `Import vật tư tiêu hao hoàn tất: ${results.created} thêm mới, ${results.updated} cập nhật, ${results.errors.length} lỗi`,
+            data: results
+        });
+    } catch (error) {
+        await t.rollback();
+        res.status(500).json({
+            success: false,
+            message: 'Lỗi khi import vật tư tiêu hao',
             error: error.message
         });
     }
@@ -1526,5 +1603,9 @@ module.exports = {
     getAssetByDkCode,
     getAssetConsumables,
     exportTemplate,
-    importFromExcel
+    exportSpecTemplate,
+    exportConsumableTemplate,
+    importFromExcel,
+    importAssetSpecificationsFromExcel,
+    importAssetConsumablesFromExcel
 };
