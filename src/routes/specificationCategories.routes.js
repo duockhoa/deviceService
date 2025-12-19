@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middleware/authMiddleware');
-const { permissionGuard } = require('../middleware/permissionGuard');
 const {
     getAllSpecificationCategories,
     getSpecificationCategoryById,
@@ -16,27 +15,27 @@ const {
 router.use(authMiddleware);
 
 // GET /api/specification-categories - Lấy tất cả specification categories
-router.get('/', permissionGuard('categories.view'), getAllSpecificationCategories);
+router.get('/',getAllSpecificationCategories);
 
 // GET /api/specification-categories/:id - Lấy specification category theo ID
-router.get('/:id', permissionGuard('categories.view'), getSpecificationCategoryById);
+router.get('/:id',getSpecificationCategoryById);
 
 // POST /api/specification-categories - Tạo specification category mới
-router.post('/', permissionGuard('categories.manage'), createSpecificationCategory);
+router.post('/',createSpecificationCategory);
 
 // PUT /api/specification-categories/:id - Cập nhật specification category
-router.put('/:id', permissionGuard('categories.manage'), updateSpecificationCategory);
+router.put('/:id',updateSpecificationCategory);
 
 // DELETE /api/specification-categories/:id - Xóa specification category
-router.delete('/:id', permissionGuard('categories.manage'), deleteSpecificationCategory);
+router.delete('/:id',deleteSpecificationCategory);
 
 // GET /api/specification-categories/by-sub-category/:subCategoryId - Lấy theo sub category
-router.get('/by-sub-category/:subCategoryId', permissionGuard('categories.view'), getSpecificationCategoriesBySubCategory);
+router.get('/by-sub-category/:subCategoryId',getSpecificationCategoriesBySubCategory);
 
 // GET /api/specification-categories/by-code/:specCode - Lấy theo spec code
-router.get('/by-code/:specCode', permissionGuard('categories.view'), getSpecificationCategoryByCode);
+router.get('/by-code/:specCode',getSpecificationCategoryByCode);
 
 // PUT /api/specification-categories/reorder/:subCategoryId - Sắp xếp lại thứ tự
-router.put('/reorder/:subCategoryId', permissionGuard('categories.manage'), reorderSpecificationCategories);
+router.put('/reorder/:subCategoryId',reorderSpecificationCategories);
 
 module.exports = router;

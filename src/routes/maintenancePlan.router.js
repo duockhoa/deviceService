@@ -3,7 +3,6 @@ const multer = require('multer');
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 const authMiddleware = require('../middleware/authMiddleware');
-const { permissionGuard } = require('../middleware/permissionGuard');
 
 const {
     generateTemplate,
@@ -23,22 +22,22 @@ router.get('/template', generateTemplate);
 router.use(authMiddleware);
 
 // Import và xem trước danh sách kế hoạch
-router.post('/import', upload.single('file'), permissionGuard('maintenance_plan.create'), importPreview);
+router.post('/import', upload.single('file'),importPreview);
 
 // Lưu kế hoạch (batch) pending
-router.post('/save', permissionGuard('maintenance_plan.create'), saveBatch);
+router.post('/save',saveBatch);
 
 // Danh sách kế hoạch tổng
-router.get('/', permissionGuard('maintenance_plan.view'), listBatches);
+router.get('/',listBatches);
 
 // Chi tiết batch
-router.get('/:id', permissionGuard('maintenance_plan.view'), getBatchDetail);
+router.get('/:id',getBatchDetail);
 
 // Phê duyệt item trong batch
-router.post('/:batchId/approve', permissionGuard('maintenance_plan.approve'), approveBatchItems);
+router.post('/:batchId/approve',approveBatchItems);
 // Từ chối item trong batch
-router.post('/:batchId/reject', permissionGuard('maintenance_plan.approve'), rejectBatchItems);
+router.post('/:batchId/reject',rejectBatchItems);
 // Xóa batch
-router.delete('/:id', permissionGuard('maintenance_plan.delete'), deleteBatch);
+router.delete('/:id',deleteBatch);
 
 module.exports = router;

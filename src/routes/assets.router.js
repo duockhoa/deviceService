@@ -3,7 +3,6 @@ const router = express.Router();
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
 
-const { permissionGuard } = require('../middleware/permissionGuard');
 const validateRequest = require('../middleware/validateMiddleware');
 const { createAssetSchema, updateAssetSchema } = require('../validators/assetValidator');
 
@@ -26,20 +25,20 @@ const {
 } = require("../controllers/assets.controllers");
 
 // CRUD routes with permission guards
-router.get('/', permissionGuard('assets.view'), getAllAssets);
-router.get('/search', permissionGuard('assets.view'), searchAssets);
-router.get('/export/template', permissionGuard('assets.view'), exportTemplate);
-router.post('/import/excel', upload.single('file'), permissionGuard('assets.create'), importFromExcel);
-router.get('/by-code/:assetCode', permissionGuard('assets.view'), getAssetByCode);
-router.get('/by-dk/:dkCode', permissionGuard('assets.view'), getAssetByDkCode);
-router.get('/by-area/:areaId', permissionGuard('assets.view'), getAssetsByArea);
-router.get('/by-sub-category/:subCategoryId', permissionGuard('assets.view'), getAssetsBySubCategory);
-router.get('/by-category/:categoryId', permissionGuard('assets.view'), getAssetsByCategory);
-router.get('/by-department/:departmentName', permissionGuard('assets.view'), getAssetsByDepartment);
-router.get('/:id/consumables', permissionGuard('assets.view'), getAssetConsumables);
-router.get('/:id', permissionGuard('assets.view'), getAssetById);
-router.post('/', permissionGuard('assets.create'), validateRequest(createAssetSchema), createAsset);
-router.put('/:id', permissionGuard('assets.update'), validateRequest(updateAssetSchema), updateAsset);
-router.delete('/:id', permissionGuard('assets.delete'), deleteAsset);
+router.get('/',getAllAssets);
+router.get('/search',searchAssets);
+router.get('/export/template',exportTemplate);
+router.post('/import/excel', upload.single('file'),importFromExcel);
+router.get('/by-code/:assetCode',getAssetByCode);
+router.get('/by-dk/:dkCode',getAssetByDkCode);
+router.get('/by-area/:areaId',getAssetsByArea);
+router.get('/by-sub-category/:subCategoryId',getAssetsBySubCategory);
+router.get('/by-category/:categoryId',getAssetsByCategory);
+router.get('/by-department/:departmentName',getAssetsByDepartment);
+router.get('/:id/consumables',getAssetConsumables);
+router.get('/:id',getAssetById);
+router.post('/',validateRequest(createAssetSchema), createAsset);
+router.put('/:id',validateRequest(updateAssetSchema), updateAsset);
+router.delete('/:id',deleteAsset);
 
 module.exports = router;

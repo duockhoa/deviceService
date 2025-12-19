@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middleware/authMiddleware');
-const { permissionGuard } = require('../middleware/permissionGuard');
 const {
     getNotificationsByUserId,
     getNotificationsByDepartment,
@@ -16,18 +15,18 @@ const {
 router.use(authMiddleware);
 
 // GET routes
-router.get('/user/:userId', permissionGuard('notifications.view'), getNotificationsByUserId);
-router.get('/department/:departmentName', permissionGuard('notifications.view'), getNotificationsByDepartment);
-router.get('/unread-count/:userId', permissionGuard('notifications.view'), getUnreadCount);
+router.get('/user/:userId',getNotificationsByUserId);
+router.get('/department/:departmentName',getNotificationsByDepartment);
+router.get('/unread-count/:userId',getUnreadCount);
 
 // POST routes
-router.post('/', permissionGuard('notifications.manage'), createNotification);
+router.post('/',createNotification);
 
 // PUT routes
-router.put('/:id/read', permissionGuard('notifications.view'), markAsRead);
-router.put('/mark-all-read/:userId', permissionGuard('notifications.view'), markAllAsRead);
+router.put('/:id/read',markAsRead);
+router.put('/mark-all-read/:userId',markAllAsRead);
 
 // DELETE routes
-router.delete('/:id', permissionGuard('notifications.manage'), deleteNotification);
+router.delete('/:id',deleteNotification);
 
 module.exports = router;

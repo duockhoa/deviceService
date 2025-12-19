@@ -25,7 +25,6 @@ const rbacRouter = require('./rbac.router');
 const reportsRouter = require('./reports.router');
 const oeeRouter = require('./oee.router');
 const { seedRBAC } = require('../controllers/rbac.controllers');
-const { permissionGuard } = require('../middleware/permissionGuard');
 
 // ==================== PUBLIC ROUTES (NO AUTH) ====================
 // Đặt TRƯỚC authMiddleware
@@ -56,11 +55,11 @@ router.use('/work-requests', workRequestsRouter); // Yêu cầu xử lý
 router.use('/notifications', notificationRouter); // Hệ thống thông báo
 router.use('/handovers', handoversRouter); // Bàn giao thiết bị
 router.use('/checklist-templates', checklistTemplateRouter); // Mẫu checklist
-router.use('/rbac', permissionGuard('rbac.manage'), rbacRouter); // Phân quyền
+router.use('/rbac', rbacRouter); // Phân quyền
 router.use('/scheduler', schedulerRouter); // Scheduled jobs testing & status
 router.use('/assets', assetsRouter);
-router.use('/reports', permissionGuard('maintenance.report'), reportsRouter);
-router.use('/oee', permissionGuard('maintenance.report'), oeeRouter);
+router.use('/reports', reportsRouter);
+router.use('/oee', oeeRouter);
 
 
 module.exports = router;

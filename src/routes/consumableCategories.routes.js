@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middleware/authMiddleware');
-const { permissionGuard } = require('../middleware/permissionGuard');
 const {
     getAllConsumableCategories,
     getConsumableCategoryById,
@@ -13,18 +12,18 @@ const {
 router.use(authMiddleware);
 
 // GET /api/consumable-categories - Lấy tất cả danh mục
-router.get('/', permissionGuard('categories.view'), getAllConsumableCategories);
+router.get('/',getAllConsumableCategories);
 
 // GET /api/consumable-categories/:id - Lấy danh mục theo ID
-router.get('/:id', permissionGuard('categories.view'), getConsumableCategoryById);
+router.get('/:id',getConsumableCategoryById);
 
 // POST /api/consumable-categories - Tạo danh mục mới
-router.post('/', permissionGuard('categories.manage'), createConsumableCategory);
+router.post('/',createConsumableCategory);
 
 // PUT /api/consumable-categories/:id - Cập nhật danh mục
-router.put('/:id', permissionGuard('categories.manage'), updateConsumableCategory);
+router.put('/:id',updateConsumableCategory);
 
 // DELETE /api/consumable-categories/:id - Xóa danh mục
-router.delete('/:id', permissionGuard('categories.manage'), deleteConsumableCategory);
+router.delete('/:id',deleteConsumableCategory);
 
 module.exports = router;

@@ -2,6 +2,22 @@ const { Incidents, Assets, User, Maintenance } = require('../models');
 const { Op } = require('sequelize');
 const { buildMaintenanceCode } = require('./maintenance.controllers');
 const NotificationService = require('../service/NotificationService');
+const { assertRBAC, nextActions, getUserRole, ENTITIES } = require('../utils/workflowRbac');
+
+const withActions = (entity, record, role) => {
+    const payload = record?.toJSON ? record.toJSON() : record;
+    return {
+        ...payload,
+        allowed_actions: nextActions(entity, payload?.status, role)
+    };
+};
+
+const sendError = (res, error, fallback) => {
+    if (error?.statusCode === 403) {
+        return res.status(403).json({ message: error.message });
+    }
+    return res.status(500).json({ message: fallback, error: error.message });
+};
 
 const buildIncidentCode = async () => {
     const year = new Date().getFullYear();
@@ -22,24 +38,27 @@ const includeCommon = [
 // GET /api/v1/incidents
 const getAllIncidents = async (req, res) => {
     try {
+        const role = getUserRole(req.user);
         const incidents = await Incidents.findAll({
             include: includeCommon,
             order: [['reported_date', 'DESC']]
         });
-        res.status(200).json(incidents);
+        const data = incidents.map((i) => withActions(ENTITIES.incident, i, role));
+        res.status(200).json(data);
     } catch (error) {
-        res.status(500).json({ message: 'Error fetching incidents', error: error.message });
+        sendError(res, error, 'Error fetching incidents');
     }
 };
 
 // GET /api/v1/incidents/:id
 const getIncidentById = async (req, res) => {
     try {
+        const role = getUserRole(req.user);
         const incident = await Incidents.findByPk(req.params.id, { include: includeCommon });
         if (!incident) return res.status(404).json({ message: 'Incident not found' });
-        res.status(200).json(incident);
+        res.status(200).json(withActions(ENTITIES.incident, incident, role));
     } catch (error) {
-        res.status(500).json({ message: 'Error fetching incident', error: error.message });
+        sendError(res, error, 'Error fetching incident');
     }
 };
 
@@ -58,6 +77,7 @@ const createIncident = async (req, res) => {
             follow_up_notes
         } = req.body;
         const userId = req.user?.id;
+        const role = getUserRole(req.user);
         if (!userId) return res.status(401).json({ message: 'Unauthorized' });
 
         const incident_code = await buildIncidentCode();
@@ -78,7 +98,7 @@ const createIncident = async (req, res) => {
         });
 
         const detail = await Incidents.findByPk(newIncident.id, { include: includeCommon });
-        res.status(201).json({ message: 'Incident created', incident: detail });
+        res.status(201).json({ message: 'Incident created', incident: withActions(ENTITIES.incident, detail, role) });
 
         // Send notification after successful incident creation
         try {
@@ -95,7 +115,7 @@ const createIncident = async (req, res) => {
             console.error('Error sending incident creation notification:', notifError);
         }
     } catch (error) {
-        res.status(500).json({ message: 'Error creating incident', error: error.message });
+        sendError(res, error, 'Error creating incident');
     }
 };
 
@@ -103,6 +123,7 @@ const createIncident = async (req, res) => {
 const updateIncident = async (req, res) => {
     try {
         const { id } = req.params;
+        const role = getUserRole(req.user);
         const data = { ...req.body };
         if (data.images && Array.isArray(data.images)) {
             data.images = JSON.stringify(data.images);
@@ -111,9 +132,9 @@ const updateIncident = async (req, res) => {
         if (!incident) return res.status(404).json({ message: 'Incident not found' });
         await incident.update(data);
         await incident.reload({ include: includeCommon });
-        res.status(200).json({ message: 'Incident updated', incident });
+        res.status(200).json({ message: 'Incident updated', incident: withActions(ENTITIES.incident, incident, role) });
     } catch (error) {
-        res.status(500).json({ message: 'Error updating incident', error: error.message });
+        sendError(res, error, 'Error updating incident');
     }
 };
 
@@ -123,8 +144,11 @@ const assessIncident = async (req, res) => {
         const { id } = req.params;
         const { assessment_notes, solution_plan, device_status, handover_required, handover_notes } = req.body;
         const userId = req.user?.id;
+        const role = getUserRole(req.user);
         const incident = await Incidents.findByPk(id, { include: includeCommon });
         if (!incident) return res.status(404).json({ message: 'Incident not found' });
+
+        assertRBAC(ENTITIES.incident, incident.status, 'investigating', role);
 
         await incident.update({
             assessment_status: 'pending',
@@ -137,9 +161,9 @@ const assessIncident = async (req, res) => {
         });
 
         await incident.reload({ include: includeCommon });
-        res.status(200).json({ message: 'Assessment submitted', incident });
+        res.status(200).json({ message: 'Assessment submitted', incident: withActions(ENTITIES.incident, incident, role) });
     } catch (error) {
-        res.status(500).json({ message: 'Error assessing incident', error: error.message });
+        sendError(res, error, 'Error assessing incident');
     }
 };
 
@@ -148,10 +172,13 @@ const approveSolution = async (req, res) => {
     try {
         const { id } = req.params;
         const approverId = req.user?.id;
+        const role = getUserRole(req.user);
         if (!approverId) return res.status(401).json({ message: 'Unauthorized' });
 
         const incident = await Incidents.findByPk(id);
         if (!incident) return res.status(404).json({ message: 'Incident not found' });
+
+        assertRBAC(ENTITIES.incident, incident.status, 'in_progress', role);
 
         // Tạo lệnh bảo trì corrective
         const maintenanceCode = typeof buildMaintenanceCode === 'function'
@@ -181,7 +208,7 @@ const approveSolution = async (req, res) => {
         await incident.reload({ include: includeCommon });
         res.status(200).json({
             message: 'Solution approved and maintenance created',
-            incident,
+            incident: withActions(ENTITIES.incident, incident, role),
             maintenance
         });
 
@@ -203,7 +230,7 @@ const approveSolution = async (req, res) => {
             console.error('Error sending incident solution approval notification:', notifError);
         }
     } catch (error) {
-        res.status(500).json({ message: 'Error approving solution', error: error.message });
+        sendError(res, error, 'Error approving solution');
     }
 };
 
@@ -212,11 +239,15 @@ const assignIncident = async (req, res) => {
     try {
         const { id } = req.params;
         const { assigned_to } = req.body;
+        const role = getUserRole(req.user);
         const incident = await Incidents.findByPk(id, { include: includeCommon });
         if (!incident) return res.status(404).json({ message: 'Incident not found' });
+
+        assertRBAC(ENTITIES.incident, incident.status, 'investigating', role);
+
         await incident.update({ assigned_to, status: 'investigating' });
         await incident.reload({ include: includeCommon });
-        res.status(200).json(incident);
+        res.status(200).json(withActions(ENTITIES.incident, incident, role));
 
         // Send notification after assignment
         try {
@@ -234,18 +265,22 @@ const assignIncident = async (req, res) => {
             console.error('Error sending incident assignment notification:', notifError);
         }
     } catch (error) {
-        res.status(500).json({ message: 'Error assigning incident', error: error.message });
+        sendError(res, error, 'Error assigning incident');
     }
 };
 
 const startIncident = async (req, res) => {
     try {
+        const role = getUserRole(req.user);
         const incident = await Incidents.findByPk(req.params.id);
         if (!incident) return res.status(404).json({ message: 'Incident not found' });
+
+        assertRBAC(ENTITIES.incident, incident.status, 'in_progress', role);
+
         await incident.update({ status: 'in_progress', started_date: new Date() });
-        res.status(200).json(incident);
+        res.status(200).json(withActions(ENTITIES.incident, incident, role));
     } catch (error) {
-        res.status(500).json({ message: 'Error starting incident', error: error.message });
+        sendError(res, error, 'Error starting incident');
     }
 };
 
@@ -253,8 +288,12 @@ const resolveIncident = async (req, res) => {
     try {
         const { id } = req.params;
         const { root_cause, solution, prevention_measures, cost, downtime_hours } = req.body;
+        const role = getUserRole(req.user);
         const incident = await Incidents.findByPk(id, { include: includeCommon });
         if (!incident) return res.status(404).json({ message: 'Incident not found' });
+
+        assertRBAC(ENTITIES.incident, incident.status, 'resolved', role);
+
         await incident.update({
             status: 'resolved',
             resolved_date: new Date(),
@@ -266,7 +305,7 @@ const resolveIncident = async (req, res) => {
         });
         
         await incident.reload({ include: includeCommon });
-        res.status(200).json(incident);
+        res.status(200).json(withActions(ENTITIES.incident, incident, role));
 
         // Send notification after resolution
         try {
@@ -285,18 +324,22 @@ const resolveIncident = async (req, res) => {
             console.error('Error sending incident resolution notification:', notifError);
         }
     } catch (error) {
-        res.status(500).json({ message: 'Error resolving incident', error: error.message });
+        sendError(res, error, 'Error resolving incident');
     }
 };
 
 const closeIncident = async (req, res) => {
     try {
+        const role = getUserRole(req.user);
         const incident = await Incidents.findByPk(req.params.id);
         if (!incident) return res.status(404).json({ message: 'Incident not found' });
+
+        assertRBAC(ENTITIES.incident, incident.status, 'closed', role);
+
         await incident.update({ status: 'closed', closed_date: new Date() });
-        res.status(200).json(incident);
+        res.status(200).json(withActions(ENTITIES.incident, incident, role));
     } catch (error) {
-        res.status(500).json({ message: 'Error closing incident', error: error.message });
+        sendError(res, error, 'Error closing incident');
     }
 };
 
@@ -314,14 +357,16 @@ const deleteIncident = async (req, res) => {
 const getMyIncidents = async (req, res) => {
     try {
         const userId = req.user?.id;
+        const role = getUserRole(req.user);
         const incidents = await Incidents.findAll({
             where: { assigned_to: userId, status: { [Op.in]: ['investigating', 'in_progress'] } },
             include: includeCommon,
             order: [['reported_date', 'DESC']]
         });
-        res.status(200).json(incidents);
+        const data = incidents.map((i) => withActions(ENTITIES.incident, i, role));
+        res.status(200).json(data);
     } catch (error) {
-        res.status(500).json({ message: 'Error fetching my incidents', error: error.message });
+        sendError(res, error, 'Error fetching my incidents');
     }
 };
 

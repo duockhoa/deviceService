@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middleware/authMiddleware');
-const { permissionGuard } = require('../middleware/permissionGuard');
 const {
     getAllTemplates,
     getTemplateById,
@@ -15,21 +14,21 @@ const {
 router.use(authMiddleware);
 
 // GET /api/v1/checklist-templates - Lấy danh sách mẫu
-router.get('/', permissionGuard('checklist.view'), getAllTemplates);
+router.get('/',getAllTemplates);
 
 // POST /api/v1/checklist-templates/seed - Tạo 4 mẫu mặc định (đặt trước /:id)
-router.post('/seed', permissionGuard('checklist.manage'), seedDefaultTemplates);
+router.post('/seed',seedDefaultTemplates);
 
 // GET /api/v1/checklist-templates/:id - Lấy chi tiết
-router.get('/:id', permissionGuard('checklist.view'), getTemplateById);
+router.get('/:id',getTemplateById);
 
 // POST /api/v1/checklist-templates - Tạo mới
-router.post('/', permissionGuard('checklist.manage'), createTemplate);
+router.post('/',createTemplate);
 
 // PUT /api/v1/checklist-templates/:id - Cập nhật
-router.put('/:id', permissionGuard('checklist.manage'), updateTemplate);
+router.put('/:id',updateTemplate);
 
 // DELETE /api/v1/checklist-templates/:id - Xóa
-router.delete('/:id', permissionGuard('checklist.manage'), deleteTemplate);
+router.delete('/:id',deleteTemplate);
 
 module.exports = router;

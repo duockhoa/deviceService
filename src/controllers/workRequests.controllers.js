@@ -1,5 +1,6 @@
 const { Op } = require('sequelize');
 const { WorkRequest, WorkRequestProgress, Assets, User, Maintenance, MaintenanceWorkTask, Incidents } = require('../models');
+const { assertRBAC, nextActions, getUserRole, ENTITIES } = require('../utils/workflowRbac');
 
 const buildRequestCode = async () => {
     const year = new Date().getFullYear();
@@ -36,10 +37,21 @@ const buildIncidentCode = async () => {
     return `INC-${year}-${String(next).padStart(4, '0')}`;
 };
 
+const withActions = (entity, record, role) => {
+    const payload = record?.toJSON ? record.toJSON() : record;
+    return { ...payload, allowed_actions: nextActions(entity, payload?.status, role) };
+};
+
+const sendError = (res, error, fallback) => {
+    if (error?.statusCode === 403) return res.status(403).json({ success: false, message: error.message });
+    return res.status(500).json({ success: false, message: fallback, error: error.message });
+};
+
 // GET /api/work-requests/my-tasks - yêu cầu được phân công cho user, chưa tạo maintenance
 const getMyAssignedWorkRequests = async (req, res) => {
     try {
         const userId = req.user?.id;
+        const role = getUserRole(req.user);
         if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
 
         const data = await WorkRequest.findAll({
@@ -50,14 +62,16 @@ const getMyAssignedWorkRequests = async (req, res) => {
             ],
             order: [['createdAt', 'DESC']]
         });
-        return res.status(200).json({ success: true, data });
+        const decorated = data.map((wr) => withActions(ENTITIES.workRequest, wr, role));
+        return res.status(200).json({ success: true, data: decorated });
     } catch (error) {
-        return res.status(500).json({ success: false, message: 'Không thể lấy danh sách yêu cầu được giao', error: error.message });
+        return sendError(res, error, 'Không thể lấy danh sách yêu cầu được giao');
     }
 };
 
 const createWorkRequest = async (req, res) => {
     try {
+        const role = getUserRole(req.user);
         const code = await buildRequestCode();
         const payload = {
             request_code: code,
@@ -76,14 +90,15 @@ const createWorkRequest = async (req, res) => {
             created_by: req.user.id
         };
         const created = await WorkRequest.create(payload);
-        res.status(201).json({ success: true, data: created });
+        res.status(201).json({ success: true, data: withActions(ENTITIES.workRequest, created, role) });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Không thể tạo yêu cầu', error: error.message });
+        sendError(res, error, 'Không thể tạo yêu cầu');
     }
 };
 
 const getWorkRequests = async (req, res) => {
     try {
+        const role = getUserRole(req.user);
         const where = {};
         const { status, priority, asset_id, requester_id, technician_id, type } = req.query;
         if (status) where.status = status;
@@ -102,14 +117,16 @@ const getWorkRequests = async (req, res) => {
             ],
             order: [['createdAt', 'DESC']]
         });
-        res.status(200).json({ success: true, data });
+        const decorated = data.map((wr) => withActions(ENTITIES.workRequest, wr, role));
+        res.status(200).json({ success: true, data: decorated });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Không thể lấy danh sách yêu cầu', error: error.message });
+        sendError(res, error, 'Không thể lấy danh sách yêu cầu');
     }
 };
 
 const getWorkRequestById = async (req, res) => {
     try {
+        const role = getUserRole(req.user);
         const wr = await WorkRequest.findByPk(req.params.id, {
             include: [
                 { model: Assets, as: 'asset', attributes: ['id', 'asset_code', 'name'] },
@@ -119,30 +136,36 @@ const getWorkRequestById = async (req, res) => {
             ]
         });
         if (!wr) return res.status(404).json({ success: false, message: 'Không tìm thấy yêu cầu' });
-        res.status(200).json({ success: true, data: wr });
+        res.status(200).json({ success: true, data: withActions(ENTITIES.workRequest, wr, role) });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Không thể lấy chi tiết yêu cầu', error: error.message });
+        sendError(res, error, 'Không thể lấy chi tiết yêu cầu');
     }
 };
 
 const updateWorkRequest = async (req, res) => {
     try {
+        const role = getUserRole(req.user);
         const wr = await WorkRequest.findByPk(req.params.id);
         if (!wr) return res.status(404).json({ success: false, message: 'Không tìm thấy yêu cầu' });
         const prevStatus = wr.status;
         const prevTech = wr.technician_id;
-        const fields = ['title', 'description', 'status', 'priority', 'technician_id', 'due_date', 'location', 'notes'];
+        const fields = ['title', 'description', 'priority', 'technician_id', 'due_date', 'location', 'notes'];
         fields.forEach((f) => {
             if (req.body[f] !== undefined) wr[f] = req.body[f];
         });
         if (req.body.priority) wr.priority = normalizePriority(req.body.priority);
         if (req.body.due_date) wr.due_date = new Date(req.body.due_date);
-        // Nếu được phân công kỹ thuật viên mà chưa có trạng thái, tự chuyển sang "assigned"
-        if (req.body.technician_id && !req.body.status && wr.status === 'pending') {
-            wr.status = 'assigned';
+
+        let nextStatus = req.body.status || prevStatus;
+        if (req.body.technician_id && !req.body.status && prevStatus === 'pending') {
+            nextStatus = 'assigned';
         }
+        if (nextStatus !== prevStatus) {
+            assertRBAC(ENTITIES.workRequest, prevStatus, nextStatus, role);
+            wr.status = nextStatus;
+        }
+
         await wr.save();
-        // Ghi nhận tiến độ khi có thay đổi trạng thái hoặc phân công
         const statusChanged = prevStatus !== wr.status;
         const techChanged = prevTech !== wr.technician_id;
         if (statusChanged || techChanged) {
@@ -154,14 +177,15 @@ const updateWorkRequest = async (req, res) => {
             });
         }
 
-        res.status(200).json({ success: true, data: wr });
+        res.status(200).json({ success: true, data: withActions(ENTITIES.workRequest, wr, role) });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Không thể cập nhật yêu cầu', error: error.message });
+        sendError(res, error, 'Không thể cập nhật yêu cầu');
     }
 };
 
 const addProgress = async (req, res) => {
     try {
+        const role = getUserRole(req.user);
         const wr = await WorkRequest.findByPk(req.params.id);
         if (!wr) return res.status(404).json({ success: false, message: 'Không tìm thấy yêu cầu' });
         const progress = await WorkRequestProgress.create({
@@ -172,20 +196,24 @@ const addProgress = async (req, res) => {
             created_by: req.user.id
         });
         if (req.body.status) {
+            assertRBAC(ENTITIES.workRequest, wr.status, req.body.status, role);
             wr.status = req.body.status;
             await wr.save();
         }
-        res.status(201).json({ success: true, data: progress });
+        res.status(201).json({ success: true, data: progress, work_request: withActions(ENTITIES.workRequest, wr, role) });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Không thể thêm tiến độ', error: error.message });
+        sendError(res, error, 'Không thể thêm tiến độ');
     }
 };
 
 const closeWorkRequest = async (req, res) => {
     try {
+        const role = getUserRole(req.user);
         const wr = await WorkRequest.findByPk(req.params.id);
         if (!wr) return res.status(404).json({ success: false, message: 'Không tìm thấy yêu cầu' });
-        wr.status = req.body.status || 'closed';
+        const targetStatus = req.body.status || 'closed';
+        assertRBAC(ENTITIES.workRequest, wr.status, targetStatus, role);
+        wr.status = targetStatus;
         wr.notes = req.body.note || wr.notes;
         await wr.save();
         await WorkRequestProgress.create({
@@ -195,9 +223,9 @@ const closeWorkRequest = async (req, res) => {
             images: null,
             created_by: req.user.id
         });
-        res.status(200).json({ success: true, data: wr });
+        res.status(200).json({ success: true, data: withActions(ENTITIES.workRequest, wr, role) });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Không thể đóng yêu cầu', error: error.message });
+        sendError(res, error, 'Không thể đóng yêu cầu');
     }
 };
 
@@ -217,11 +245,14 @@ const deleteWorkRequest = async (req, res) => {
 // Tạo lịch bảo trì từ yêu cầu
 const createMaintenanceFromRequest = async (req, res) => {
     try {
+        const role = getUserRole(req.user);
         const wr = await WorkRequest.findByPk(req.params.id);
         if (!wr) return res.status(404).json({ success: false, message: 'Không tìm thấy yêu cầu' });
         if (!wr.asset_id) {
             return res.status(400).json({ success: false, message: 'Yêu cầu này không gắn thiết bị nên không thể tạo lịch bảo trì.' });
         }
+
+        assertRBAC(ENTITIES.workRequest, wr.status, 'in_progress', role);
 
         const maintenance_code = await buildMaintenanceCode();
         // Map loại
@@ -272,21 +303,24 @@ const createMaintenanceFromRequest = async (req, res) => {
         wr.status = 'in_progress';
         await wr.save();
 
-        return res.status(200).json({ success: true, maintenance_id: maintenance.id, code: maintenance.maintenance_code });
+        return res.status(200).json({ success: true, maintenance_id: maintenance.id, code: maintenance.maintenance_code, work_request: withActions(ENTITIES.workRequest, wr, role) });
     } catch (error) {
-        return res.status(500).json({ success: false, message: 'Không thể tạo lịch bảo trì', error: error.message });
+        return sendError(res, error, 'Không thể tạo lịch bảo trì');
     }
 };
 
 // Tạo sự cố từ yêu cầu
 const createIncidentFromRequest = async (req, res) => {
     try {
+        const role = getUserRole(req.user);
         const wr = await WorkRequest.findByPk(req.params.id);
         if (!wr) return res.status(404).json({ success: false, message: 'Không tìm thấy yêu cầu' });
 
         if (!wr.asset_id) {
             return res.status(400).json({ success: false, message: 'Yêu cầu này không gắn thiết bị nên không thể tạo sự cố/lệnh sửa chữa.' });
         }
+
+        assertRBAC(ENTITIES.workRequest, wr.status, 'in_progress', role);
 
         const code = await buildIncidentCode();
         const incident = await Incidents.create({
@@ -305,20 +339,23 @@ const createIncidentFromRequest = async (req, res) => {
         wr.status = 'in_progress';
         await wr.save();
 
-        return res.status(200).json({ success: true, incident_id: incident.id, code: incident.incident_code });
+        return res.status(200).json({ success: true, incident_id: incident.id, code: incident.incident_code, work_request: withActions(ENTITIES.workRequest, wr, role) });
     } catch (error) {
-        return res.status(500).json({ success: false, message: 'Không thể tạo sự cố', error: error.message });
+        return sendError(res, error, 'Không thể tạo sự cố');
     }
 };
 
 // Tạo đồng thời sự cố và lệnh sửa chữa từ yêu cầu
 const createIncidentAndMaintenanceFromRequest = async (req, res) => {
     try {
+        const role = getUserRole(req.user);
         const wr = await WorkRequest.findByPk(req.params.id);
         if (!wr) return res.status(404).json({ success: false, message: 'Không tìm thấy yêu cầu' });
         if (!wr.asset_id) {
             return res.status(400).json({ success: false, message: 'Yêu cầu này không gắn thiết bị nên không thể tạo sự cố/lệnh sửa chữa.' });
         }
+
+        assertRBAC(ENTITIES.workRequest, wr.status, 'in_progress', role);
 
         // Tạo sự cố
         const incidentCode = await buildIncidentCode();
@@ -388,10 +425,11 @@ const createIncidentAndMaintenanceFromRequest = async (req, res) => {
             incident_id: incident.id,
             incident_code: incident.incident_code,
             maintenance_id: maintenance.id,
-            maintenance_code: maintenance.maintenance_code
+            maintenance_code: maintenance.maintenance_code,
+            work_request: withActions(ENTITIES.workRequest, wr, role)
         });
     } catch (error) {
-        return res.status(500).json({ success: false, message: 'Không thể tạo sự cố và lệnh bảo trì', error: error.message });
+        return sendError(res, error, 'Không thể tạo sự cố và lệnh bảo trì');
     }
 };
 

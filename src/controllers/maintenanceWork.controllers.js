@@ -5,15 +5,60 @@ const {
     MaintenanceImages,
     Assets, 
     User,
-    MaintenanceWorkTask
+    MaintenanceWorkTask,
+    WorkRequest,
+    Incidents
 } = require('../models');
 const { Op } = require('sequelize');
 const NotificationService = require('../service/NotificationService');
+const { assertRBAC, nextActions, getUserRole, ENTITIES } = require('../utils/workflowRbac');
+
+const withActions = (entity, record, role) => {
+    const payload = record?.toJSON ? record.toJSON() : record;
+    return { ...payload, allowed_actions: nextActions(entity, payload?.status, role) };
+};
+
+const sendError = (res, error, fallback) => {
+    if (error?.statusCode === 403) {
+        return res.status(403).json({ success: false, message: error.message });
+    }
+    return res.status(500).json({ success: false, message: fallback, error: error.message });
+};
+
+const syncLinkedEntities = async (maintenance, role) => {
+    // Incident linked via maintenance_id on incident record
+    const incident = await Incidents.findOne({ where: { maintenance_id: maintenance.id } });
+    if (incident && incident.status !== 'closed') {
+        const target = incident.status === 'resolved' ? 'closed' : 'resolved';
+        try {
+            assertRBAC(ENTITIES.incident, incident.status, target, role);
+            await incident.update({
+                status: target,
+                resolved_date: target === 'resolved' ? new Date() : incident.resolved_date,
+                closed_date: target === 'closed' ? new Date() : incident.closed_date
+            });
+        } catch (err) {
+            // Ignore RBAC failure for linked sync to avoid blocking main approval
+            console.warn('Sync incident status skipped:', err.message);
+        }
+    }
+
+    const wr = await WorkRequest.findOne({ where: { maintenance_id: maintenance.id } });
+    if (wr && wr.status !== 'closed') {
+        try {
+            assertRBAC(ENTITIES.workRequest, wr.status, 'closed', role);
+            await wr.update({ status: 'closed' });
+        } catch (err) {
+            console.warn('Sync work request status skipped:', err.message);
+        }
+    }
+};
 
 // GET /api/maintenance-work/my-tasks - Lấy danh sách WO được giao cho user đăng nhập
 const getMyWorkOrders = async (req, res) => {
     try {
         const userId = req.user.id; // Lấy từ JWT token middleware
+        const role = getUserRole(req.user);
 
         const workOrders = await Maintenance.findAll({
             where: {
@@ -66,18 +111,16 @@ const getMyWorkOrders = async (req, res) => {
             };
         });
 
+        const data = workOrdersWithProgress.map((wo) => withActions(ENTITIES.workOrder, wo, role));
+
         res.status(200).json({
             success: true,
-            data: workOrdersWithProgress,
-            count: workOrdersWithProgress.length
+            data,
+            count: data.length
         });
     } catch (error) {
         console.error('Error fetching work orders:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Lỗi khi lấy danh sách công việc',
-            error: error.message
-        });
+        sendError(res, error, 'Lỗi khi lấy danh sách công việc');
     }
 };
 
@@ -86,6 +129,7 @@ const getWorkOrderById = async (req, res) => {
     try {
         const { id } = req.params;
         const userId = req.user.id;
+        const role = getUserRole(req.user);
 
         const workOrder = await Maintenance.findOne({
             where: { 
@@ -183,15 +227,11 @@ const getWorkOrderById = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            data: workOrderData
+            data: withActions(ENTITIES.workOrder, workOrderData, role)
         });
     } catch (error) {
         console.error('Error fetching work order:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Lỗi khi lấy chi tiết công việc',
-            error: error.message
-        });
+        sendError(res, error, 'Lỗi khi lấy chi tiết công việc');
     }
 };
 
@@ -201,6 +241,7 @@ const updateChecklistItem = async (req, res) => {
         const { id, checklistId } = req.params;
         const { is_completed, actual_value, notes } = req.body;
         const userId = req.user.id;
+        const role = getUserRole(req.user);
 
         // Kiểm tra quyền
         const maintenance = await Maintenance.findOne({
@@ -244,6 +285,7 @@ const updateChecklistItem = async (req, res) => {
 
         // Tự động cập nhật trạng thái maintenance nếu bắt đầu làm
         if (maintenance.status === 'pending' && is_completed) {
+            assertRBAC(ENTITIES.workOrder, maintenance.status, 'in_progress', role);
             await maintenance.update({
                 status: 'in_progress',
                 actual_start_date: new Date()
@@ -252,16 +294,13 @@ const updateChecklistItem = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            data: checklist,
+            data: withActions(ENTITIES.workOrder, maintenance, role),
+            checklist,
             message: 'Cập nhật checklist thành công'
         });
     } catch (error) {
         console.error('Error updating checklist:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Lỗi khi cập nhật checklist',
-            error: error.message
-        });
+        sendError(res, error, 'Lỗi khi cập nhật checklist');
     }
 };
 
@@ -278,6 +317,7 @@ const addProgressUpdate = async (req, res) => {
             notes
         } = req.body;
         const userId = req.user.id;
+        const role = getUserRole(req.user);
 
         // Kiểm tra quyền
         const maintenance = await Maintenance.findOne({
@@ -312,6 +352,7 @@ const addProgressUpdate = async (req, res) => {
 
         // Tự động cập nhật trạng thái
         if (maintenance.status === 'pending') {
+            assertRBAC(ENTITIES.workOrder, maintenance.status, 'in_progress', role);
             await maintenance.update({
                 status: 'in_progress',
                 actual_start_date: new Date()
@@ -321,15 +362,12 @@ const addProgressUpdate = async (req, res) => {
         res.status(201).json({
             success: true,
             data: progress,
+            work_order: withActions(ENTITIES.workOrder, maintenance, role),
             message: 'Cập nhật tiến độ thành công'
         });
     } catch (error) {
         console.error('Error adding progress:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Lỗi khi cập nhật tiến độ',
-            error: error.message
-        });
+        sendError(res, error, 'Lỗi khi cập nhật tiến độ');
     }
 };
 
@@ -382,6 +420,7 @@ const completeWork = async (req, res) => {
         const { id } = req.params;
         const { final_notes } = req.body;
         const userId = req.user.id;
+        const role = getUserRole(req.user);
 
         const maintenance = await Maintenance.findOne({
             where: { id, technician_id: userId }
@@ -418,6 +457,8 @@ const completeWork = async (req, res) => {
             actual_duration = (diffMs / (1000 * 60 * 60)).toFixed(2); // Convert to hours
         }
 
+        assertRBAC(ENTITIES.workOrder, maintenance.status, 'awaiting_approval', role);
+
         await maintenance.update({
             status: 'awaiting_approval',
             actual_end_date: actual_end_date,
@@ -438,7 +479,7 @@ const completeWork = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            data: updatedMaintenance,
+            data: withActions(ENTITIES.workOrder, updatedMaintenance, role),
             message: 'Đã hoàn thành công việc. Chờ trưởng bộ phận duyệt.'
         });
 
@@ -456,11 +497,7 @@ const completeWork = async (req, res) => {
         }
     } catch (error) {
         console.error('Error completing work:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Lỗi khi hoàn thành công việc',
-            error: error.message
-        });
+        sendError(res, error, 'Lỗi khi hoàn thành công việc');
     }
 };
 
@@ -470,10 +507,11 @@ const getPendingApproval = async (req, res) => {
         const userId = req.user.id;
         // Giả sử trưởng BP là người tạo WO (created_by)
         
+        const role = getUserRole(req.user);
         const pendingWOs = await Maintenance.findAll({
             where: {
                 created_by: userId,
-                status: 'completed' // Đã hoàn thành, chờ duyệt
+                status: 'awaiting_approval' // Đã hoàn thành, chờ duyệt
             },
             include: [
                 {
@@ -496,18 +534,16 @@ const getPendingApproval = async (req, res) => {
             order: [['actual_end_date', 'DESC']]
         });
 
+        const data = pendingWOs.map((wo) => withActions(ENTITIES.workOrder, wo, role));
+
         res.status(200).json({
             success: true,
-            data: pendingWOs,
-            count: pendingWOs.length
+            data,
+            count: data.length
         });
     } catch (error) {
         console.error('Error fetching pending approvals:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Lỗi khi lấy danh sách chờ duyệt',
-            error: error.message
-        });
+        sendError(res, error, 'Lỗi khi lấy danh sách chờ duyệt');
     }
 };
 
@@ -517,9 +553,10 @@ const approveWork = async (req, res) => {
         const { id } = req.params;
         const { rejection_reason, approved } = req.body;
         const userId = req.user.id;
+        const role = getUserRole(req.user);
 
         const maintenance = await Maintenance.findOne({
-            where: { id, created_by: userId, status: 'completed' }
+            where: { id, created_by: userId, status: 'awaiting_approval' }
         });
 
         if (!maintenance) {
@@ -530,19 +567,21 @@ const approveWork = async (req, res) => {
         }
 
         if (approved) {
-            // Phê duyệt - chuyển sang status 'completed' (hoàn thành)
+            assertRBAC(ENTITIES.workOrder, maintenance.status, 'completed', role);
             await maintenance.update({
                 status: 'completed',
                 notes: `${maintenance.notes || ''}\n[Đã duyệt bởi User ID: ${userId} vào ${new Date().toLocaleString('vi-VN')}]`.trim()
             });
 
+            await syncLinkedEntities(maintenance, role);
+
             res.status(200).json({
                 success: true,
-                data: maintenance,
+                data: withActions(ENTITIES.workOrder, maintenance, role),
                 message: 'Đã phê duyệt công việc. Chuyển vào Hồ sơ bảo trì.'
             });
         } else {
-            // Từ chối - trả lại cho technician để sửa
+            assertRBAC(ENTITIES.workOrder, maintenance.status, 'in_progress', role);
             await maintenance.update({
                 status: 'in_progress',
                 notes: `${maintenance.notes || ''}\n[Yêu cầu sửa lại] ${rejection_reason || ''} - ${new Date().toLocaleString('vi-VN')}`.trim()
@@ -550,17 +589,13 @@ const approveWork = async (req, res) => {
 
             res.status(200).json({
                 success: true,
-                data: maintenance,
+                data: withActions(ENTITIES.workOrder, maintenance, role),
                 message: 'Đã từ chối và yêu cầu chỉnh sửa'
             });
         }
     } catch (error) {
         console.error('Error approving work:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Lỗi khi duyệt công việc',
-            error: error.message
-        });
+        sendError(res, error, 'Lỗi khi duyệt công việc');
     }
 };
 
