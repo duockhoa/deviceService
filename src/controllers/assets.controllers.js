@@ -26,235 +26,49 @@ const getAllAssets = async (req, res) => {
                 { 
                     model: AssetSubCategories, 
                     as: 'SubCategory',
-                    include: [{
-                        model: AssetCategories,
-                        as: 'Category'
-                    }]
+                    include: [{ model: AssetCategories, as: 'Category' }]
                 },
                 { model: User, as: 'Creator', attributes: ['id', 'name', 'employee_code'] },
                 { model: Departments, as: 'Department', attributes: ['name', 'description'] },
-                {
-                    // GET /api/assets/export/template - Export Asset template (asset_code auto-generated)
-                    const exportTemplate = async (req, res) => {
-                        try {
-                            const [subCategories, areas, departments] = await Promise.all([
-                                AssetSubCategories.findAll({ attributes: ['code', 'name'] }),
-                                Areas.findAll({ attributes: ['code', 'name'] }),
-                                Departments.findAll({ attributes: ['name'] })
-                            ]);
-
-                            const wb = XLSX.utils.book_new();
-
-                            // Sheet 1: Asset data (no asset_code column)
-                            const assetSheet = [{
-                                'Tên thiết bị (*)': '',
-                                'dk_code (tùy chọn, có thể trùng)': '',
-                                'Loại thiết bị (mã hoặc tên) (*)': '',
-                                'Khu vực (mã hoặc tên)': '',
-                                'Bộ phận (tên)': '',
-                                'Model': '',
-                                'Serial': '',
-                                'Ngày sử dụng (YYYY-MM-DD)': '',
-                                'Ghi chú': ''
-                            }];
-                            const wsAsset = XLSX.utils.json_to_sheet(assetSheet);
-                            wsAsset['!cols'] = [
-                                { wch: 28 }, // Tên thiết bị
-                                { wch: 24 }, // dk_code
-                                { wch: 30 }, // Loại thiết bị
-                                { wch: 22 }, // Khu vực
-                                { wch: 22 }, // Bộ phận
-                                { wch: 18 }, // Model
-                                { wch: 18 }, // Serial
-                                { wch: 24 }, // Ngày sử dụng
-                                { wch: 30 }  // Ghi chú
-                            ];
-                            XLSX.utils.book_append_sheet(wb, wsAsset, 'Thông tin thiết bị');
-
-                            // Sheet 2: Instructions
-                            const instructions = [
-                                { 'Nội dung': 'HƯỚNG DẪN IMPORT THIẾT BỊ' },
-                                { 'Nội dung': '' },
-                                { 'Nội dung': 'Mã thiết bị hệ thống (asset_code) sẽ được tự sinh.' },
-                                { 'Nội dung': 'Mã DK là mã nội bộ, có thể trùng.' },
-                                { 'Nội dung': '' },
-                                { 'Nội dung': 'Cột bắt buộc: Tên thiết bị, Loại thiết bị (mã hoặc tên).' },
-                                { 'Nội dung': 'Khu vực nhập mã hoặc tên; Bộ phận nhập đúng tên.' },
-                                { 'Nội dung': 'Định dạng ngày: YYYY-MM-DD (ví dụ 2025-12-31).' }
-                            ];
-                            const wsInstructions = XLSX.utils.json_to_sheet(instructions);
-                            wsInstructions['!cols'] = [{ wch: 90 }];
-                            XLSX.utils.book_append_sheet(wb, wsInstructions, 'Hướng dẫn');
-
-                            // Sheet 3: Loại thiết bị reference
-                            const subCatData = subCategories.map(sc => ({
-                                'Mã': sc.code,
-                                'Tên': sc.name
-                            }));
-                            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(subCatData), 'Loại thiết bị');
-
-                            // Sheet 4: Khu vực reference
-                            const areaData = areas.map(a => ({ 'Mã': a.code, 'Tên': a.name }));
-                            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(areaData), 'Khu vực');
-
-                            // Sheet 5: Bộ phận reference
-                            const deptData = departments.map(d => ({ 'Tên bộ phận': d.name }));
-                            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(deptData), 'Bộ phận');
-
-                            const excelBuffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-                            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-                            res.setHeader('Content-Disposition', 'attachment; filename=Template_Thiet_Bi.xlsx');
-                            return res.send(excelBuffer);
-                        } catch (error) {
-                            console.error('Error exporting template:', error);
-                            res.status(500).json({
-                                success: false,
-                                message: 'Lỗi khi export template',
-                                error: error.message
-                            });
-                        }
-                    };
-            await t.rollback();
-            return res.status(400).json({
-                success: false,
-                message: 'Sub Category ID and Name are required'
-            });
-        }
-
-        // Auto-generate asset_code nếu không gửi hoặc rỗng
-        let finalAssetCode = asset_code && asset_code.trim() ? asset_code.trim().toUpperCase() : null;
-        if (!finalAssetCode) {
-            finalAssetCode = await generateAssetCode();
-        }
-
-        // Đảm bảo không trùng asset_code
-        const existing = await Assets.findOne({ where: { asset_code: finalAssetCode } });
-        if (existing) {
-            await t.rollback();
-            return res.status(409).json({
-                success: false,
-                message: 'Asset code already exists'
-            });
-        }
-
-        // Kiểm tra sub_category có tồn tại không
-        const subCategory = await AssetSubCategories.findByPk(sub_category_id);
-        if (!subCategory) {
-            await t.rollback();
-            return res.status(400).json({
-                success: false,
-                message: 'Sub category not found'
-            });
-        }
-
-        // Tạo asset cơ bản
-        const assetData = {
-            sub_category_id,
-            team_id,
-            area_id,
-            asset_code: finalAssetCode,
-            dk_code: normalizedDkCode,
-            name,
-            status: status || 'active',
-            created_by: req.user.id
-        };
-
-        const newAsset = await Assets.create(assetData, { transaction : t });
-
-        // Tạo AssetGeneralInfo - luôn tạo record (có thể để trống)
-        const generalInfoData = {
-            asset_id: newAsset.id,
-            manufacture_year: generalInfo?.manufacture_year || null,
-            manufacturer: generalInfo?.manufacturer || null,
-            country_of_origin: generalInfo?.country_of_origin || null,
-            model: generalInfo?.model || null,
-            serial_number: generalInfo?.serial_number || null,
-            warranty_period_months: generalInfo?.warranty_period_months || null,
-            warranty_expiry_date: generalInfo?.warranty_expiry_date || null,
-            supplier: generalInfo?.supplier || null,
-            description: generalInfo?.description || null
-        };
-
-        await AssetGeneralInfo.create(generalInfoData, { transaction: t });
-        
-        // FIX: Tạo Components theo model structure
-        console.log('Components to create:', components);
-        if (components && components.length > 0) {
-
-            // Filter out empty components
-            const validComponents = components.filter(comp => 
-                comp.component_name && comp.component_name.trim() !== ''
-            );
-            console.log('Valid components:', validComponents);
-            if (validComponents.length > 0) {
-                const componentData = validComponents.map(comp => ({
-                    asset_id: newAsset.id,
-                    component_name: comp.component_name?.trim(),
-                    component_code: comp.component_code?.trim() || null, // FIX: component_code thay vì part_number
-                    specification: comp.specification?.trim() || null,   // FIX: thêm specification
-                    quantity: comp.quantity || 1,
-                    unit: comp.unit?.trim() || null,
-                    remarks: comp.remarks?.trim() || null
-                }));
-
-                await AssetComponent.bulkCreate(componentData, { transaction: t });
-            }
-        }
-
-        // Commit transaction
-        await t.commit();
-
-        // Lấy asset mới tạo với đầy đủ thông tin
-        const assetWithDetails = await Assets.findByPk(newAsset.id, {
-            include: [
-                { 
-                    model: AssetSubCategories, 
-                    as: 'SubCategory',
-                    include: [{
-                        model: AssetCategories,
-                        as: 'Category'
-                    }]
-                },
-                { model: User, as: 'Creator', attributes: ['id', 'name', 'employee_code'] },
-                { model: Departments, as: 'Department' },
-                {
-                    model: Areas,
-                    as: 'Area',
-                    include: [{ model: Plants, as: 'Plant' }]
-                },
-                {
-                    model: AssetGeneralInfo,
-                    as: 'GeneralInfo'
-                },
-                // Include created components
-                // Keep include light for lookup panel
+                { model: Areas, as: 'Area', attributes: ['code', 'name'] }
             ]
         });
-
-        res.status(201).json({
-            success: true,
-            message: 'Asset, general info, and components created successfully',
-            data: assetWithDetails
-        });
+        res.status(200).json({ success: true, data: assets });
     } catch (error) {
-        await t.rollback();
-        
-        if (error.name === 'SequelizeUniqueConstraintError') {
-            return res.status(409).json({
-                success: false,
-                message: 'Asset code or component code already exists'
-            });
-        }
-
-        res.status(400).json({
-            success: false,
-            message: 'Error creating asset',
-            error: error.message
-        });
+        res.status(500).json({ success: false, message: 'Error fetching assets', error: error.message });
     }
 };
 
 // PUT /api/assets/:id - Cập nhật asset (bao gồm components)
+// GET /api/assets/:id - Get asset by ID
+const getAssetById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const asset = await Assets.findByPk(id, {
+            include: [
+                { model: AssetSubCategories, as: 'SubCategory', include: [{ model: AssetCategories, as: 'Category' }] },
+                { model: User, as: 'Creator', attributes: ['id', 'name', 'employee_code'] },
+                { model: Departments, as: 'Department' },
+                { model: Areas, as: 'Area' }
+            ]
+        });
+        if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });
+        res.status(200).json({ success: true, data: asset });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Error fetching asset', error: error.message });
+    }
+};
+
+// POST /api/assets - Create new asset
+const createAsset = async (req, res) => {
+    try {
+        const asset = await Assets.create(req.body);
+        res.status(201).json({ success: true, data: asset });
+    } catch (error) {
+        res.status(400).json({ success: false, message: 'Error creating asset', error: error.message });
+    }
+};
+
 const updateAsset = async (req, res) => {
     const t = await sequelize.transaction();
     

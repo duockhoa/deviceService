@@ -4,7 +4,7 @@
  */
 
 const { Maintenance, Assets, User, MaintenancePlan } = require('../models');
-const { createStateMachine, SM_ENTITIES, MAINTENANCE_ACTIONS, normalizeRole } = require('../utils/stateMachine');
+const { createStateMachine, ENTITIES, MAINTENANCE_ACTIONS, normalizeRole } = require('../utils/stateMachine');
 const AuditLogService = require('./AuditLogService');
 const SideEffectsService = require('./SideEffectsService');
 const { Op } = require('sequelize');
@@ -41,7 +41,7 @@ class MaintenanceService {
             const role = normalizeRole(user);
 
             // Create state machine
-            const sm = createStateMachine(SM_ENTITIES.MAINTENANCE);
+            const sm = createStateMachine(ENTITIES.MAINTENANCE);
 
             // Prepare context
             const context = { user: { ...user, role }, payload };
@@ -135,7 +135,7 @@ class MaintenanceService {
             }
 
             const role = normalizeRole(user);
-            const sm = createStateMachine(SM_ENTITIES.MAINTENANCE);
+            const sm = createStateMachine(ENTITIES.MAINTENANCE);
             const nextActions = sm.getNextActions(maintenance.status, role);
 
             return {
@@ -189,7 +189,7 @@ class MaintenanceService {
             });
 
             const role = normalizeRole(user);
-            const sm = createStateMachine(SM_ENTITIES.MAINTENANCE);
+            const sm = createStateMachine(ENTITIES.MAINTENANCE);
             const nextActions = sm.getNextActions(maintenance.status, role);
 
             // Reload với associations
@@ -250,7 +250,7 @@ class MaintenanceService {
             });
 
             const role = normalizeRole(user);
-            const sm = createStateMachine(SM_ENTITIES.MAINTENANCE);
+            const sm = createStateMachine(ENTITIES.MAINTENANCE);
 
             const data = maintenance.map(m => {
                 const nextActions = sm.getNextActions(m.status, role);

@@ -4,7 +4,7 @@
  */
 
 const { Incidents, Assets, User } = require('../models');
-const { createStateMachine, SM_ENTITIES, INCIDENT_ACTIONS, normalizeRole } = require('../utils/stateMachine');
+const { createStateMachine, ENTITIES, INCIDENT_ACTIONS, normalizeRole } = require('../utils/stateMachine');
 const AuditLogService = require('./AuditLogService');
 const SideEffectsService = require('./SideEffectsService');
 const { Op } = require('sequelize');
@@ -36,7 +36,7 @@ class IncidentService {
             const role = normalizeRole(user);
 
             // Create state machine
-            const sm = createStateMachine(SM_ENTITIES.INCIDENT);
+            const sm = createStateMachine(ENTITIES.INCIDENT);
 
             // Prepare context
             const context = { user: { ...user, role }, payload };
@@ -132,7 +132,7 @@ class IncidentService {
             }
 
             const role = normalizeRole(user);
-            const sm = createStateMachine(SM_ENTITIES.INCIDENT);
+            const sm = createStateMachine(ENTITIES.INCIDENT);
             const nextActions = sm.getNextActions(incident.status, role);
 
             return {
@@ -170,7 +170,7 @@ class IncidentService {
             });
 
             const role = normalizeRole(user);
-            const sm = createStateMachine(SM_ENTITIES.INCIDENT);
+            const sm = createStateMachine(ENTITIES.INCIDENT);
             const nextActions = sm.getNextActions('reported', role);
 
             // Reload với associations
@@ -229,7 +229,7 @@ class IncidentService {
             });
 
             const role = normalizeRole(user);
-            const sm = createStateMachine(SM_ENTITIES.INCIDENT);
+            const sm = createStateMachine(ENTITIES.INCIDENT);
 
             const data = incidents.map(incident => {
                 const nextActions = sm.getNextActions(incident.status, role);

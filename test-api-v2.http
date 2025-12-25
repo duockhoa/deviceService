@@ -1,0 +1,179 @@
+###
+### SAP PM-lite Core - API V2 Test Suite
+### 
+### Prerequisites:
+### 1. Service running: pm2 start deviceService
+### 2. Valid JWT token (replace YOUR_TOKEN_HERE)
+### 3. Test data: incident_id=1, maintenance_id=1, asset_id=1
+###
+
+@baseUrl = http://localhost:3009
+@token = YOUR_TOKEN_HERE
+
+### ========================================
+### INCIDENT V2 ENDPOINTS
+### ========================================
+
+### 1. Triage Incident - Set Notification Type (M1/M2/M3/M4)
+POST {{baseUrl}}/api/v2/incidents/1/triage
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "severity": "critical",
+  "notification_type": "M1",
+  "notes": "Motor failure, production stopped - need immediate attention"
+}
+
+### 2. Isolate M1 Incident - Asset goes to DOWN status
+POST {{baseUrl}}/api/v2/incidents/1/isolate
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "downtime_minutes": 120,
+  "isolation_reason": "Equipment breakdown - production line stopped"
+}
+
+### 3. Assign Incident to Technician
+POST {{baseUrl}}/api/v2/incidents/1/assign
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "assigned_to": 5
+}
+
+### 4. Start Working on Incident
+POST {{baseUrl}}/api/v2/incidents/1/start
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{}
+
+### 5. Resolve Incident
+POST {{baseUrl}}/api/v2/incidents/1/resolve
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "resolution": "Replaced faulty motor bearing",
+  "root_cause": "Bearing wear due to lack of lubrication",
+  "corrective_action": "Implemented weekly lubrication schedule"
+}
+
+### 6. Close Incident (M1 must have downtime_minutes)
+POST {{baseUrl}}/api/v2/incidents/1/close
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "downtime_minutes": 180
+}
+
+### 7. Get Incident Status with Asset Context
+GET {{baseUrl}}/api/v2/incidents/1/status
+Authorization: Bearer {{token}}
+
+### ========================================
+### MAINTENANCE V2 ENDPOINTS
+### ========================================
+
+### 8. Release Work Order - REL Status (Scope Locked)
+POST {{baseUrl}}/api/v2/maintenance/1/release
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "scheduled_at": "2025-12-26T08:00:00Z",
+  "assigned_to": 5
+}
+
+### 9. Start Work Order - Asset goes to MNTC status
+POST {{baseUrl}}/api/v2/maintenance/1/start
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "actual_start_date": "2025-12-26T08:30:00Z"
+}
+
+### 10. TECO Work Order - TECO Status (Cost Locked)
+POST {{baseUrl}}/api/v2/maintenance/1/teco
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "actual_end_date": "2025-12-26T12:00:00Z",
+  "actual_cost": 5000000,
+  "labor_cost": 3000000,
+  "material_cost": 2000000,
+  "completion_notes": "All tasks completed successfully"
+}
+
+### 11. Close Work Order - Asset goes to AVLB status
+POST {{baseUrl}}/api/v2/maintenance/1/close
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{}
+
+### 12. Get Work Order Status with Gates
+GET {{baseUrl}}/api/v2/maintenance/1/status
+Authorization: Bearer {{token}}
+
+### 13. Test Scope Lock Enforcement (Should Fail)
+PUT {{baseUrl}}/api/v2/maintenance/1
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "asset_id": 999,
+  "notes": "Trying to change asset after REL status"
+}
+
+### 14. Test Cost Lock Enforcement (Should Fail)
+PUT {{baseUrl}}/api/v2/maintenance/1
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "actual_cost": 9999999,
+  "notes": "Trying to change cost after TECO status"
+}
+
+### ========================================
+### REPORTS V2 ENDPOINTS
+### ========================================
+
+### 15. Get MTBF/MTTR Report (M1 Only)
+GET {{baseUrl}}/api/v2/reports/mtbf-mttr?asset_id=1&start_date=2025-10-01&end_date=2025-12-25
+Authorization: Bearer {{token}}
+
+### 16. Get Availability Report
+GET {{baseUrl}}/api/v2/reports/availability?asset_id=1&start_date=2025-11-01&end_date=2025-12-25
+Authorization: Bearer {{token}}
+
+### 17. Get Planned vs Unplanned Ratio
+GET {{baseUrl}}/api/v2/reports/planned-vs-unplanned?asset_id=1&start_date=2025-10-01&end_date=2025-12-25
+Authorization: Bearer {{token}}
+
+### 18. Get Maintenance Backlog
+GET {{baseUrl}}/api/v2/reports/backlog?asset_id=1
+Authorization: Bearer {{token}}
+
+### 19. Get Complete KPI Dashboard
+GET {{baseUrl}}/api/v2/reports/asset-kpi-dashboard?asset_id=1&start_date=2025-10-01&end_date=2025-12-25
+Authorization: Bearer {{token}}
+
+### ========================================
+### BACKWARD COMPATIBILITY TESTS (V1 API)
+### ========================================
+
+### 20. V1 API Still Works - Get Incidents
+GET {{baseUrl}}/api/v1/incidents
+Authorization: Bearer {{token}}
+
+### 21. V1 API Still Works - Get Maintenance
+GET {{baseUrl}}/api/v1/maintenance
+Authorization: Bearer {{token}}

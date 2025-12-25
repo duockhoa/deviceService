@@ -9,7 +9,7 @@ const { Op } = require('sequelize');
  */
 const checkMaintenanceDueSoon = cron.schedule('0 8 * * *', async () => {
     try {
-        console.log('🔔 Running scheduled job: Check Maintenance Due Soon...');
+        console.log(' Running scheduled job: Check Maintenance Due Soon...');
         
         const today = new Date();
         const threeDaysLater = new Date();
@@ -55,9 +55,9 @@ const checkMaintenanceDueSoon = cron.schedule('0 8 * * *', async () => {
             });
         }
 
-        console.log('✅ Maintenance Due Soon check completed');
+        console.log(' Maintenance Due Soon check completed');
     } catch (error) {
-        console.error('❌ Error in checkMaintenanceDueSoon:', error);
+        console.error(' Error in checkMaintenanceDueSoon:', error);
     }
 });
 
@@ -67,7 +67,7 @@ const checkMaintenanceDueSoon = cron.schedule('0 8 * * *', async () => {
  */
 const checkMaintenanceOverdue = cron.schedule('0 9 * * *', async () => {
     try {
-        console.log('🔔 Running scheduled job: Check Maintenance Overdue...');
+        console.log('Running scheduled job: Check Maintenance Overdue...');
         
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -108,9 +108,9 @@ const checkMaintenanceOverdue = cron.schedule('0 9 * * *', async () => {
             });
         }
 
-        console.log('✅ Maintenance Overdue check completed');
+        console.log(' Maintenance Overdue check completed');
     } catch (error) {
-        console.error('❌ Error in checkMaintenanceOverdue:', error);
+        console.error(' Error in checkMaintenanceOverdue:', error);
     }
 });
 
@@ -120,7 +120,7 @@ const checkMaintenanceOverdue = cron.schedule('0 9 * * *', async () => {
  */
 const checkCalibrationDueSoon = cron.schedule('30 8 * * *', async () => {
     try {
-        console.log('🔔 Running scheduled job: Check Calibration Due Soon...');
+        console.log(' Running scheduled job: Check Calibration Due Soon...');
         
         const today = new Date();
         const sevenDaysLater = new Date();
@@ -165,9 +165,9 @@ const checkCalibrationDueSoon = cron.schedule('30 8 * * *', async () => {
             });
         }
 
-        console.log('✅ Calibration Due Soon check completed');
+        console.log(' Calibration Due Soon check completed');
     } catch (error) {
-        console.error('❌ Error in checkCalibrationDueSoon:', error);
+        console.error(' Error in checkCalibrationDueSoon:', error);
     }
 });
 
@@ -177,7 +177,7 @@ const checkCalibrationDueSoon = cron.schedule('30 8 * * *', async () => {
  */
 const checkCalibrationOverdue = cron.schedule('30 9 * * *', async () => {
     try {
-        console.log('🔔 Running scheduled job: Check Calibration Overdue...');
+        console.log(' Running scheduled job: Check Calibration Overdue...');
         
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -218,9 +218,9 @@ const checkCalibrationOverdue = cron.schedule('30 9 * * *', async () => {
             });
         }
 
-        console.log('✅ Calibration Overdue check completed');
+        console.log(' Calibration Overdue check completed');
     } catch (error) {
-        console.error('❌ Error in checkCalibrationOverdue:', error);
+        console.error(' Error in checkCalibrationOverdue:', error);
     }
 });
 
@@ -230,7 +230,7 @@ const checkCalibrationOverdue = cron.schedule('30 9 * * *', async () => {
  */
 const checkWarrantyExpiring = cron.schedule('0 10 * * *', async () => {
     try {
-        console.log('🔔 Running scheduled job: Check Warranty Expiring...');
+        console.log(' Running scheduled job: Check Warranty Expiring...');
         
         const today = new Date();
         const thirtyDaysLater = new Date();
@@ -277,17 +277,24 @@ const checkWarrantyExpiring = cron.schedule('0 10 * * *', async () => {
             });
         }
 
-        console.log('✅ Warranty Expiring check completed');
+        console.log(' Warranty Expiring check completed');
     } catch (error) {
-        console.error('❌ Error in checkWarrantyExpiring:', error);
+        console.error(' Error in checkWarrantyExpiring:', error);
     }
 });
 
 /**
  * Start all scheduled jobs
  */
+let hasStarted = false;
 function startNotificationScheduler() {
-    console.log('🚀 Starting Notification Scheduler...');
+    if (hasStarted) {
+        console.log(' Notification Scheduler already started, skipping...');
+        return;
+    }
+    
+    console.log(' Starting Notification Scheduler...');
+    hasStarted = true;
     
     checkMaintenanceDueSoon.start();
     checkMaintenanceOverdue.start();
@@ -295,8 +302,8 @@ function startNotificationScheduler() {
     checkCalibrationOverdue.start();
     checkWarrantyExpiring.start();
     
-    console.log('✅ Notification Scheduler started successfully!');
-    console.log('📅 Schedule:');
+    console.log(' Notification Scheduler started successfully!');
+    console.log(' Schedule:');
     console.log('  - Maintenance Due Soon: Daily at 8:00 AM');
     console.log('  - Maintenance Overdue: Daily at 9:00 AM');
     console.log('  - Calibration Due Soon: Daily at 8:30 AM');
@@ -308,7 +315,7 @@ function startNotificationScheduler() {
  * Stop all scheduled jobs
  */
 function stopNotificationScheduler() {
-    console.log('🛑 Stopping Notification Scheduler...');
+    console.log(' Stopping Notification Scheduler...');
     
     checkMaintenanceDueSoon.stop();
     checkMaintenanceOverdue.stop();
@@ -316,7 +323,7 @@ function stopNotificationScheduler() {
     checkCalibrationOverdue.stop();
     checkWarrantyExpiring.stop();
     
-    console.log('✅ Notification Scheduler stopped');
+    console.log('Notification Scheduler stopped');
 }
 
 module.exports = {

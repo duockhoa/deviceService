@@ -10,7 +10,7 @@ require('./models/permission.model');
 require('./models/rolePermission.model');
 require('./models/userRole.model');
 
-require('./jobs');
+const { startJobs } = require('./jobs');
 
 // cookie-parser
 var cookieParser = require('cookie-parser');
@@ -133,7 +133,10 @@ app.use((req, res, next) => {
 // routes
 const router = require('./routes/index.js');
 const { errorHandler } = require('./middleware/errorHandler');
+
+// V1 API
 app.use('/api/v1/', router);
+
 app.get('/', (req, res) => {
     res.send('Device Service is running');
 });
@@ -141,6 +144,9 @@ app.get('/', (req, res) => {
 // error handler last
 app.use(errorHandler);
 
-app.listen(port, () => {
+app.listen(port, async () => {
     console.log(`Example app listening on port ${port}`);
+    
+    // Start background jobs after server is up
+    await startJobs();
 });

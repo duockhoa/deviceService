@@ -61,17 +61,6 @@ const Incidents = sequelize.define('incidents', {
         allowNull: true,
         comment: 'Thời gian downtime tính bằng phút'
     },
-    capa_required: {
-        type: DataTypes.BOOLEAN,
-        allowNull: false,
-        defaultValue: false,
-        comment: 'Có yêu cầu CAPA hay không'
-    },
-    capa_actions: {
-        type: DataTypes.JSON,
-        allowNull: true,
-        comment: 'Danh sách hành động CAPA (JSON array)'
-    },
     triaged_at: {
         type: DataTypes.DATE,
         allowNull: true,
