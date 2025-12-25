@@ -20,6 +20,10 @@ const {
     getAssetByCode,
     getAssetByDkCode,
     getAssetConsumables,        // Lấy vật tư tiêu hao
+    createAssetConsumable,      // Thêm vật tư tiêu hao
+    updateAssetConsumable,      // Cập nhật vật tư tiêu hao
+    deleteAssetConsumable,      // Xóa vật tư tiêu hao
+    getLowStockConsumables,     // Lấy vật tư dưới ngưỡng
     exportTemplate,
     exportSpecTemplate,
     exportConsumableTemplate,
@@ -43,7 +47,11 @@ router.get('/by-area/:areaId',getAssetsByArea);
 router.get('/by-sub-category/:subCategoryId',getAssetsBySubCategory);
 router.get('/by-category/:categoryId',getAssetsByCategory);
 router.get('/by-department/:departmentName',getAssetsByDepartment);
+router.get('/consumables/low-stock', getLowStockConsumables); // Must be before /:id
 router.get('/:id/consumables',getAssetConsumables);
+router.post('/:id/consumables', createAssetConsumable);
+router.put('/:id/consumables/:consumableId', updateAssetConsumable);
+router.delete('/:id/consumables/:consumableId', deleteAssetConsumable);
 router.get('/:id',getAssetById);
 router.post('/',validateRequest(createAssetSchema), createAsset);
 router.put('/:id',validateRequest(updateAssetSchema), updateAsset);

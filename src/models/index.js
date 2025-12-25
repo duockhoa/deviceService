@@ -357,6 +357,18 @@ AssetConsumables.belongsTo(Assets, {
     as: 'Asset'
 });
 
+// AssetConsumables - ConsumableCategories (Many-to-One)
+AssetConsumables.belongsTo(ConsumableCategories, {
+    foreignKey: 'consumable_category_id',
+    targetKey: 'id',
+    as: 'ConsumableCategory'
+});
+ConsumableCategories.hasMany(AssetConsumables, {
+    foreignKey: 'consumable_category_id',
+    sourceKey: 'id',
+    as: 'AssetConsumables'
+});
+
 // 1. User - ConsumableCategories associations (created_by, updated_by)
 User.hasMany(ConsumableCategories, {
     foreignKey: 'created_by',

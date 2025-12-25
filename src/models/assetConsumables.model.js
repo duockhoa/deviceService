@@ -16,25 +16,46 @@ const AssetConsumables = sequelize.define('AssetConsumables', {
         },
         comment: 'ID của thiết bị'
     },
+    consumable_category_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+            model: 'consumable_categories',
+            key: 'id'
+        },
+        comment: 'ID danh mục vật tư'
+    },
     item_name: {
         type: DataTypes.STRING(255),
-        allowNull: false,
-        comment: 'Tên vật tư tiêu hao'
+        allowNull: true,
+        comment: 'Tên vật tư tiêu hao (deprecated - dùng từ ConsumableCategory)'
     },
     specification: {
         type: DataTypes.TEXT,
         allowNull: true,
-        comment: 'Thông số kỹ thuật'
+        comment: 'Thông số kỹ thuật / Quy cách'
     },
     unit: {
         type: DataTypes.STRING(50),
         allowNull: true,
-        comment: 'Đơn vị tính (lít, ml, kg, g, cái, bộ...)'
+        comment: 'Đơn vị tính (deprecated - dùng từ ConsumableCategory)'
     },
-    replacement_cycle: {
+    current_quantity: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+        defaultValue: 0,
+        comment: 'Số lượng hiện tại trong kho'
+    },
+    min_stock_level: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+        defaultValue: 0,
+        comment: 'Ngưỡng tối thiểu cảnh báo'
+    },
+    replacement_cycle_hours: {
         type: DataTypes.INTEGER,
         allowNull: true,
-        comment: 'Chu kỳ thay thế (số giờ hoạt động)'
+        comment: 'Chu kỳ thay thế (giờ hoạt động)'
     },
     unit_price: {
         type: DataTypes.DECIMAL(15, 2),

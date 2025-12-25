@@ -898,21 +898,50 @@ const exportSpecTemplate = async (req, res) => {
 const exportConsumableTemplate = async (req, res) => {
     try {
         const wb = XLSX.utils.book_new();
+        
+        // Sheet 1: Template với ví dụ
         const data = [{
-            'asset_code (*)': '',
-            'Tên vật tư (*)': '',
-            'Định mức': '',
-            'Chu kỳ': '',
-            'Đơn vị': '',
-            'Ghi chú': ''
+            'Mã thiết bị (*)': 'TBDB-0001',
+            'Tên vật tư (*)': 'Dầu bôi trơn',
+            'Đơn vị (*)': 'Lít',
+            'Thông số kỹ thuật': 'Shell Omala S2 G 320',
+            'Số lượng hiện tại': '10',
+            'Ngưỡng tối thiểu': '5',
+            'Chu kỳ thay (giờ)': '2000',
+            'Đơn giá (VND)': '150000',
+            'Nhà cung cấp': 'Shell Vietnam',
+            'Ghi chú': 'Kiểm tra định kỳ 3 tháng'
         }];
         XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), 'Vật tư tiêu hao');
 
+        // Sheet 2: Hướng dẫn
         const instructions = [
-            { 'Nội dung': 'IMPORT VẬT TƯ TIÊU HAO' },
-            { 'Nội dung': 'Bắt buộc: asset_code, Tên vật tư.' },
-            { 'Nội dung': 'Chỉ map theo asset_code (không dùng dk_code).' },
-            { 'Nội dung': 'Không tự tạo thiết bị nếu không tìm thấy asset_code.' }
+            { 'Nội dung': 'HƯỚNG DẪN IMPORT VẬT TƯ TIÊU HAO' },
+            { 'Nội dung': '' },
+            { 'Nội dung': 'CÁC CỘT BẮT BUỘC (*)' },
+            { 'Nội dung': '- Mã thiết bị: Mã thiết bị cần thêm vật tư (VD: TBDB-0001)' },
+            { 'Nội dung': '- Tên vật tư: Tên vật tư tiêu hao (VD: Dầu bôi trơn)' },
+            { 'Nội dung': '- Đơn vị: Đơn vị tính (Lít, Kg, Cái, Bộ, ml...)' },
+            { 'Nội dung': '' },
+            { 'Nội dung': 'CÁC CỘT TÙY CHỌN' },
+            { 'Nội dung': '- Thông số kỹ thuật: Quy cách, model của vật tư' },
+            { 'Nội dung': '- Số lượng hiện tại: Số lượng trong kho (mặc định: 0)' },
+            { 'Nội dung': '- Ngưỡng tối thiểu: Ngưỡng cảnh báo cần mua (mặc định: 0)' },
+            { 'Nội dung': '- Chu kỳ thay (giờ): Chu kỳ thay thế theo giờ hoạt động' },
+            { 'Nội dung': '- Đơn giá (VND): Đơn giá mỗi đơn vị tính' },
+            { 'Nội dung': '- Nhà cung cấp: Tên nhà cung cấp' },
+            { 'Nội dung': '- Ghi chú: Thông tin bổ sung' },
+            { 'Nội dung': '' },
+            { 'Nội dung': 'CÁCH HOẠT ĐỘNG' },
+            { 'Nội dung': '- Hệ thống tự động tìm danh mục vật tư theo Tên' },
+            { 'Nội dung': '- Nếu chưa có, sẽ tự tạo danh mục mới' },
+            { 'Nội dung': '- Nếu vật tư đã tồn tại cho thiết bị, dữ liệu sẽ được cập nhật' },
+            { 'Nội dung': '' },
+            { 'Nội dung': 'LƯU Ý' },
+            { 'Nội dung': '- Mã thiết bị phải tồn tại trong hệ thống' },
+            { 'Nội dung': '- Tên vật tư giống nhau sẽ được gom chung vào 1 danh mục' },
+            { 'Nội dung': '- Số lượng và ngưỡng phải là số dương' },
+            { 'Nội dung': '- Cảnh báo hiện khi Số lượng < Ngưỡng tối thiểu' }
         ];
         XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(instructions), 'Hướng dẫn');
 
@@ -1344,8 +1373,14 @@ const importAssetConsumablesFromExcel = async (req, res) => {
             });
         }
 
+        // Load assets and consumable categories
         const assets = await Assets.findAll({ attributes: ['id', 'asset_code'] });
         const assetMap = new Map(assets.map(a => [a.asset_code.toUpperCase(), a.id]));
+
+        const { ConsumableCategories } = require('../models');
+        const categories = await ConsumableCategories.findAll({ attributes: ['id', 'code', 'name'] });
+        const categoryCodeMap = new Map(categories.map(c => [c.code.toUpperCase(), c]));
+        const categoryNameMap = new Map(categories.map(c => [c.name.toUpperCase(), c]));
 
         const results = { created: 0, updated: 0, errors: [], skipped: [] };
 
@@ -1354,11 +1389,10 @@ const importAssetConsumablesFromExcel = async (req, res) => {
             const rowNum = i + 2;
 
             try {
-                const assetCodeRaw = row['asset_code (*)'] || row['asset_code'] || row['Mã thiết bị'] || row['Mã thiết bị (*)'];
-                const itemNameRaw = row['Tên vật tư (*)'] || row['Tên vật tư'] || row['Item Name'];
-
-                if (!assetCodeRaw || !itemNameRaw) {
-                    results.errors.push({ row: rowNum, error: 'Thiếu Mã thiết bị hoặc Tên vật tư' });
+                // Parse asset code
+                const assetCodeRaw = row['Mã thiết bị (*)'] || row['Mã thiết bị'] || row['asset_code (*)'] || row['asset_code'];
+                if (!assetCodeRaw) {
+                    results.errors.push({ row: rowNum, error: 'Thiếu Mã thiết bị' });
                     continue;
                 }
 
@@ -1370,21 +1404,77 @@ const importAssetConsumablesFromExcel = async (req, res) => {
                     continue;
                 }
 
+                // Parse consumable - tìm hoặc tạo mới danh mục từ tên
+                let category = null;
+                let consumable_category_id = null;
+                
+                const itemNameRaw = row['Tên vật tư (*)'] || row['Tên vật tư'];
+                const unitRaw = row['Đơn vị (*)'] || row['Đơn vị'] || row['unit'];
+
+                if (!itemNameRaw) {
+                    results.errors.push({ row: rowNum, error: 'Thiếu Tên vật tư' });
+                    continue;
+                }
+
+                if (!unitRaw) {
+                    results.errors.push({ row: rowNum, error: 'Thiếu Đơn vị' });
+                    continue;
+                }
+
                 const itemName = itemNameRaw.toString().trim();
+                const unit = unitRaw.toString().trim();
+                const itemNameUpper = itemName.toUpperCase();
+                
+                // Tìm danh mục theo tên
+                category = categoryNameMap.get(itemNameUpper);
+                
+                // Nếu chưa có danh mục, tạo mới
+                if (!category) {
+                    const newCategory = await ConsumableCategories.create({
+                        code: `VT-${Date.now().toString().slice(-6)}`, // Auto generate code
+                        name: itemName,
+                        type: 'consumable',
+                        description: `Tự động tạo từ import`,
+                        is_active: true
+                    }, { transaction: t });
+                    
+                    category = newCategory;
+                    consumable_category_id = newCategory.id;
+                    categoryNameMap.set(itemNameUpper, newCategory);
+                } else {
+                    consumable_category_id = category.id;
+                }
+
+                // Parse numeric fields
+                const parseNumber = (value) => {
+                    if (value === null || value === undefined || value === '') return null;
+                    const num = parseFloat(value);
+                    return isNaN(num) ? null : num;
+                };
+
                 const payload = {
                     asset_id: assetId,
-                    item_name: itemName,
-                    specification: row['Định mức'] || null,
-                    unit: row['Đơn vị'] || null,
-                    replacement_cycle: row['Chu kỳ'] ? parseInt(row['Chu kỳ']) : null,
-                    unit_price: null,
-                    supplier: null,
+                    consumable_category_id: consumable_category_id,
+                    specification: row['Thông số kỹ thuật'] || null,
+                    current_quantity: parseNumber(row['Số lượng hiện tại']) || 0,
+                    min_stock_level: parseNumber(row['Ngưỡng tối thiểu']) || 0,
+                    replacement_cycle_hours: parseNumber(row['Chu kỳ thay (giờ)']) || parseNumber(row['Chu kỳ']),
+                    unit_price: parseNumber(row['Đơn giá (VND)']) || parseNumber(row['Đơn giá']),
+                    supplier: row['Nhà cung cấp'] || null,
                     remarks: row['Ghi chú'] || null
                 };
 
-                const existing = await AssetConsumables.findOne({
-                    where: { asset_id: assetId, item_name: itemName }
-                });
+                // Check if consumable already exists for this asset + category
+                let existing = null;
+                if (consumable_category_id) {
+                    existing = await AssetConsumables.findOne({
+                        where: { 
+                            asset_id: assetId, 
+                            consumable_category_id: consumable_category_id 
+                        },
+                        transaction: t
+                    });
+                }
 
                 if (existing) {
                     await existing.update(payload, { transaction: t });
@@ -1422,6 +1512,13 @@ const getAssetConsumables = async (req, res) => {
         
         const consumables = await AssetConsumables.findAll({
             where: { asset_id: id },
+            include: [
+                {
+                    model: require('../models').ConsumableCategories,
+                    as: 'ConsumableCategory',
+                    attributes: ['id', 'code', 'name', 'type', 'description']
+                }
+            ],
             order: [['created_at', 'ASC']]
         });
 
@@ -1434,6 +1531,196 @@ const getAssetConsumables = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Error fetching asset consumables',
+            error: error.message
+        });
+    }
+};
+
+// POST /api/assets/:id/consumables - Thêm vật tư tiêu hao cho asset
+const createAssetConsumable = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const {
+            consumable_category_id,
+            current_quantity,
+            min_stock_level,
+            replacement_cycle_hours,
+            unit_price,
+            supplier,
+            specification,
+            remarks
+        } = req.body;
+
+        // Verify asset exists
+        const asset = await Assets.findByPk(id);
+        if (!asset) {
+            return res.status(404).json({
+                success: false,
+                message: 'Asset not found'
+            });
+        }
+
+        const consumable = await AssetConsumables.create({
+            asset_id: id,
+            consumable_category_id,
+            current_quantity: current_quantity || 0,
+            min_stock_level: min_stock_level || 0,
+            replacement_cycle_hours,
+            unit_price,
+            supplier,
+            specification,
+            remarks
+        });
+
+        // Fetch with ConsumableCategory info
+        const result = await AssetConsumables.findByPk(consumable.id, {
+            include: [
+                {
+                    model: require('../models').ConsumableCategories,
+                    as: 'ConsumableCategory',
+                    attributes: ['id', 'code', 'name', 'type', 'description']
+                }
+            ]
+        });
+
+        res.status(201).json({
+            success: true,
+            data: result,
+            message: 'Consumable added successfully'
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error creating asset consumable',
+            error: error.message
+        });
+    }
+};
+
+// PUT /api/assets/:id/consumables/:consumableId - Cập nhật vật tư tiêu hao
+const updateAssetConsumable = async (req, res) => {
+    try {
+        const { id, consumableId } = req.params;
+        const updateData = req.body;
+
+        const consumable = await AssetConsumables.findOne({
+            where: {
+                id: consumableId,
+                asset_id: id
+            }
+        });
+
+        if (!consumable) {
+            return res.status(404).json({
+                success: false,
+                message: 'Consumable not found'
+            });
+        }
+
+        await consumable.update(updateData);
+
+        // Fetch updated data with ConsumableCategory
+        const result = await AssetConsumables.findByPk(consumable.id, {
+            include: [
+                {
+                    model: require('../models').ConsumableCategories,
+                    as: 'ConsumableCategory',
+                    attributes: ['id', 'code', 'name', 'type', 'description']
+                }
+            ]
+        });
+
+        res.status(200).json({
+            success: true,
+            data: result,
+            message: 'Consumable updated successfully'
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error updating asset consumable',
+            error: error.message
+        });
+    }
+};
+
+// DELETE /api/assets/:id/consumables/:consumableId - Xóa vật tư tiêu hao
+const deleteAssetConsumable = async (req, res) => {
+    try {
+        const { id, consumableId } = req.params;
+
+        const consumable = await AssetConsumables.findOne({
+            where: {
+                id: consumableId,
+                asset_id: id
+            }
+        });
+
+        if (!consumable) {
+            return res.status(404).json({
+                success: false,
+                message: 'Consumable not found'
+            });
+        }
+
+        await consumable.destroy();
+
+        res.status(200).json({
+            success: true,
+            message: 'Consumable deleted successfully'
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error deleting asset consumable',
+            error: error.message
+        });
+    }
+};
+
+// GET /api/consumables/low-stock - Lấy danh sách vật tư dưới ngưỡng
+const getLowStockConsumables = async (req, res) => {
+    try {
+        const { Sequelize } = require('sequelize');
+        const { ConsumableCategories } = require('../models');
+        
+        const lowStockItems = await AssetConsumables.findAll({
+            where: {
+                [Sequelize.Op.and]: [
+                    Sequelize.where(
+                        Sequelize.col('current_quantity'),
+                        '<',
+                        Sequelize.col('min_stock_level')
+                    )
+                ]
+            },
+            include: [
+                {
+                    model: Assets,
+                    as: 'Asset',
+                    attributes: ['id', 'asset_code', 'name', 'dk_code']
+                },
+                {
+                    model: ConsumableCategories,
+                    as: 'ConsumableCategory',
+                    attributes: ['id', 'code', 'name', 'type']
+                }
+            ],
+            order: [
+                [Sequelize.literal('(current_quantity - min_stock_level)'), 'ASC']
+            ]
+        });
+
+        res.status(200).json({
+            success: true,
+            data: lowStockItems,
+            count: lowStockItems.length,
+            message: `Found ${lowStockItems.length} items below minimum stock level`
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching low stock consumables',
             error: error.message
         });
     }
@@ -1506,6 +1793,10 @@ module.exports = {
     getAssetByCode,
     getAssetByDkCode,
     getAssetConsumables,
+    createAssetConsumable,
+    updateAssetConsumable,
+    deleteAssetConsumable,
+    getLowStockConsumables,
     exportTemplate,
     exportSpecTemplate,
     exportConsumableTemplate,
