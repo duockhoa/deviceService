@@ -9,6 +9,7 @@ const baseSchema = {
     sub_category_id: Joi.number().integer().positive(),
     area_id: Joi.number().integer().positive().allow(null),
     department_id: Joi.number().integer().positive().allow(null),
+    team_id: Joi.string().max(255).allow('', null),
     plant_id: Joi.number().integer().positive().allow(null),
     status: Joi.string().valid(...statusEnum),
     description: Joi.string().allow('', null),

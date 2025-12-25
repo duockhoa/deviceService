@@ -46,10 +46,27 @@ const getAssetById = async (req, res) => {
         const { id } = req.params;
         const asset = await Assets.findByPk(id, {
             include: [
-                { model: AssetSubCategories, as: 'SubCategory', include: [{ model: AssetCategories, as: 'Category' }] },
+                { 
+                    model: AssetSubCategories, 
+                    as: 'SubCategory', 
+                    include: [{ model: AssetCategories, as: 'Category' }] 
+                },
                 { model: User, as: 'Creator', attributes: ['id', 'name', 'employee_code'] },
                 { model: Departments, as: 'Department' },
-                { model: Areas, as: 'Area' }
+                { 
+                    model: Areas, 
+                    as: 'Area',
+                    include: [{ model: Plants, as: 'Plant' }]
+                },
+                { model: AssetGeneralInfo, as: 'GeneralInfo' },
+                { model: AssetComponent, as: 'Components' },
+                { 
+                    model: AssetSpecifications, 
+                    as: 'Specifications',
+                    include: [{ model: SpecificationCategories, as: 'SpecCategory' }]
+                },
+                { model: AssetAttachment, as: 'Attachments' },
+                { model: AssetConsumables, as: 'Consumables' }
             ]
         });
         if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });
@@ -62,9 +79,26 @@ const getAssetById = async (req, res) => {
 // POST /api/assets - Create new asset
 const createAsset = async (req, res) => {
     try {
-        const asset = await Assets.create(req.body);
+        console.log('=== CREATE ASSET REQUEST ===');
+        console.log('Body:', JSON.stringify(req.body, null, 2));
+        console.log('User ID:', req.user?.id);
+        console.log('Team ID:', req.body.team_id);
+        
+        // Thêm created_by từ user đang đăng nhập
+        const assetData = {
+            ...req.body,
+            created_by: req.user?.id || null
+        };
+        
+        console.log('Asset data to create:', JSON.stringify(assetData, null, 2));
+        
+        const asset = await Assets.create(assetData);
+        console.log('Asset created successfully:', asset.id);
         res.status(201).json({ success: true, data: asset });
     } catch (error) {
+        console.error('=== CREATE ASSET ERROR ===');
+        console.error('Error:', error.message);
+        console.error('Stack:', error.stack);
         res.status(400).json({ success: false, message: 'Error creating asset', error: error.message });
     }
 };
@@ -74,7 +108,15 @@ const updateAsset = async (req, res) => {
     
     try {
         const { id } = req.params;
-        const { generalInfo, components, ...assetData } = req.body;
+        console.log('=== UPDATE ASSET REQUEST ===');
+        console.log('Asset ID:', id);
+        console.log('Body:', JSON.stringify(req.body, null, 2));
+        
+        const { generalInfo, components, specifications, consumables, deviceImage, attachedFiles, ...assetData } = req.body;
+        
+        console.log('Extracted assetData:', JSON.stringify(assetData, null, 2));
+        console.log('Team ID in assetData:', assetData.team_id);
+        
         if (assetData.dk_code !== undefined) {
             assetData.dk_code = assetData.dk_code
                 ? assetData.dk_code.toString().trim().toUpperCase()
