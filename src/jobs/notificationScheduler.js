@@ -1,5 +1,5 @@
 const cron = require('node-cron');
-const { Maintenance, Calibration, Assets } = require('../models');
+const { Maintenance, Calibration, Assets, AssetGeneralInfo } = require('../models');
 const NotificationService = require('../service/NotificationService');
 const { Op } = require('sequelize');
 
@@ -242,25 +242,36 @@ const checkWarrantyExpiring = cron.schedule('0 10 * * *', async () => {
         // Find assets with warranty expiring within 30 days
         const expiringAssets = await Assets.findAll({
             where: {
-                warranty_expiry: {
-                    [Op.between]: [today, thirtyDaysLater]
-                },
                 status: {
                     [Op.notIn]: ['disposed', 'retired']
                 }
-            }
+            },
+            include: [
+                {
+                    model: AssetGeneralInfo,
+                    as: 'GeneralInfo',
+                    attributes: ['warranty_expiry_date'],
+                    required: true,
+                    where: {
+                        warranty_expiry_date: {
+                            [Op.between]: [today, thirtyDaysLater]
+                        }
+                    }
+                }
+            ]
         });
 
         console.log(`Found ${expiringAssets.length} assets with warranty expiring within 30 days`);
 
         for (const asset of expiringAssets) {
-            const daysUntilExpiry = Math.ceil((new Date(asset.warranty_expiry) - today) / (1000 * 60 * 60 * 24));
+            const warrantyExpiry = asset.GeneralInfo?.warranty_expiry_date;
+            const daysUntilExpiry = Math.ceil((new Date(warrantyExpiry) - today) / (1000 * 60 * 60 * 24));
             
             await NotificationService.notifyWarrantyExpiring({
                 assetId: asset.id,
                 assetCode: asset.asset_code,
                 assetName: asset.name,
-                warrantyExpiry: asset.warranty_expiry,
+                warrantyExpiry,
                 daysUntilExpiry,
                 department: asset.department
             });

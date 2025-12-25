@@ -1,28 +1,56 @@
+/**
+ * DEPRECATED - Chuyển sang sử dụng stateMachine.js
+ * File này giữ lại để tương thích ngược
+ */
+const { 
+    createStateMachine, 
+    ENTITIES: SM_ENTITIES,
+    normalizeRole: smNormalizeRole,
+    ROLES: SM_ROLES
+} = require('./stateMachine');
+
 const ENTITIES = {
     incident: 'incident',
     workRequest: 'workRequest',
-    workOrder: 'workOrder'
+    maintenance: 'maintenance' // Thêm maintenance (thay workOrder)
 };
 
-const ROLES = ['REQUESTER', 'TECHNICIAN', 'MANAGER', 'QA', 'ADMIN'];
+const ROLES = ['REQUESTER', 'TECHNICIAN', 'MANAGER', 'QA', 'ENGINEERING', 'PLANNER', 'ADMIN'];
 
+// Legacy RBAC - giữ để tương thích
 const WORKFLOW_RBAC = {
     incident: {
         reported: {
-            investigating: ['MANAGER', 'QA', 'ADMIN']
+            triaged: ['MANAGER', 'QA', 'ADMIN'],
+            cancelled: ['MANAGER', 'ADMIN']
         },
-        investigating: {
-            in_progress: ['MANAGER', 'ADMIN']
+        triaged: {
+            out_of_service: ['MANAGER', 'QA', 'ADMIN'],
+            assigned: ['MANAGER', 'ADMIN']
+        },
+        out_of_service: {
+            assigned: ['MANAGER', 'ADMIN']
+        },
+        assigned: {
+            in_progress: ['TECHNICIAN', 'ADMIN']
         },
         in_progress: {
-            resolved: ['TECHNICIAN', 'MANAGER', 'ADMIN']
+            post_fix_check: ['TECHNICIAN', 'ADMIN']
+        },
+        post_fix_check: {
+            resolved: ['QA', 'MANAGER', 'ADMIN'],
+            in_progress: ['QA', 'MANAGER', 'ADMIN']
         },
         resolved: {
             closed: ['QA', 'MANAGER', 'ADMIN']
         },
-        closed: {}
+        closed: {},
+        cancelled: {}
     },
     workRequest: {
+        draft: {
+            pending: ['REQUESTER', 'PLANNER', 'ADMIN']
+        },
         pending: {
             assigned: ['MANAGER', 'ADMIN']
         },
@@ -30,39 +58,60 @@ const WORKFLOW_RBAC = {
             in_progress: ['TECHNICIAN', 'ADMIN']
         },
         in_progress: {
+            awaiting_confirm: ['TECHNICIAN', 'MANAGER', 'ADMIN'],
             closed: ['MANAGER', 'QA', 'ADMIN']
         },
-        closed: {}
+        awaiting_confirm: {
+            closed: ['MANAGER', 'QA', 'ADMIN']
+        },
+        closed: {},
+        cancelled: {}
     },
-    workOrder: {
+    maintenance: {
+        draft: {
+            pending: ['PLANNER', 'MANAGER', 'ADMIN'],
+            cancelled: ['MANAGER', 'PLANNER', 'ADMIN']
+        },
         pending: {
-            in_progress: ['TECHNICIAN', 'ADMIN']
+            approved: ['MANAGER', 'QA', 'ADMIN'],
+            cancelled: ['MANAGER', 'ADMIN']
+        },
+        approved: {
+            scheduled: ['PLANNER', 'MANAGER', 'ADMIN'],
+            cancelled: ['MANAGER', 'ADMIN']
+        },
+        scheduled: {
+            in_progress: ['TECHNICIAN', 'ADMIN'],
+            cancelled: ['MANAGER', 'ADMIN']
         },
         in_progress: {
-            awaiting_approval: ['TECHNICIAN', 'ADMIN']
+            awaiting_acceptance: ['TECHNICIAN', 'ADMIN']
         },
-        awaiting_approval: {
-            completed: ['MANAGER', 'ADMIN'],
-            in_progress: ['MANAGER', 'ADMIN']
+        awaiting_acceptance: {
+            accepted: ['QA', 'ENGINEERING', 'ADMIN'],
+            in_progress: ['QA', 'ENGINEERING', 'ADMIN']
         },
-        completed: {
-            closed: ['QA', 'MANAGER', 'ADMIN']
+        accepted: {
+            closed: ['MANAGER', 'ADMIN']
         },
-        closed: {}
+        closed: {},
+        cancelled: {}
     }
 };
 
 const normalize = (val) => (typeof val === 'string' ? val.toUpperCase() : null);
 
+/**
+ * Lấy role của user - sử dụng normalizeRole từ stateMachine
+ */
 const getUserRole = (user = {}) => {
-    const candidates = [user.role, user.position, user.title];
-    if (Array.isArray(user.roles) && user.roles.length) {
-        candidates.push(user.roles[0], user.roles[0]?.name, user.roles[0]?.code);
-    }
-    const found = candidates.map(normalize).find((r) => ROLES.includes(r));
-    return found || 'REQUESTER';
+    return smNormalizeRole(user);
 };
 
+/**
+ * DEPRECATED - Sử dụng stateMachine.transition() thay thế
+ * Giữ lại để tương thích code cũ
+ */
 const assertRBAC = (entity, from, to, role) => {
     const rules = WORKFLOW_RBAC[entity] || {};
     const transitions = rules[from] || {};
@@ -74,6 +123,10 @@ const assertRBAC = (entity, from, to, role) => {
     }
 };
 
+/**
+ * DEPRECATED - Sử dụng stateMachine.getNextActions() thay thế
+ * Trả về danh sách trạng thái tiếp theo (legacy)
+ */
 const nextActions = (entity, from, role) => {
     const rules = WORKFLOW_RBAC[entity] || {};
     const transitions = rules[from] || {};
@@ -82,11 +135,35 @@ const nextActions = (entity, from, role) => {
         .map(([to]) => to);
 };
 
+/**
+ * Hàm mới - lấy danh sách ACTIONS có thể thực hiện (không phải next states)
+ * Sử dụng state machine
+ */
+const getNextActions = (entity, currentState, role) => {
+    // Map entity name
+    const entityMap = {
+        'incident': SM_ENTITIES.INCIDENT,
+        'maintenance': SM_ENTITIES.MAINTENANCE
+    };
+    
+    const mappedEntity = entityMap[entity];
+    if (!mappedEntity) {
+        // Fallback to legacy for workRequest
+        return nextActions(entity, currentState, role);
+    }
+
+    const sm = createStateMachine(mappedEntity);
+    return sm.getNextActions(currentState, role);
+};
+
 module.exports = {
     ENTITIES,
     ROLES,
     WORKFLOW_RBAC,
     getUserRole,
     assertRBAC,
-    nextActions
+    nextActions,
+    getNextActions, // Hàm mới
+    createStateMachine, // Export để controller sử dụng
+    SM_ENTITIES
 };
