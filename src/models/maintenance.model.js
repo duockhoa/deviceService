@@ -34,10 +34,76 @@ const Maintenance = sequelize.define('maintenance', {
         comment: 'Mức độ ưu tiên của công việc bảo trì'
     },
     status: {
-        type: DataTypes.ENUM('pending', 'approved', 'in_progress', 'awaiting_approval', 'completed', 'cancelled', 'closed'),
+        type: DataTypes.ENUM('draft', 'pending', 'approved', 'scheduled', 'in_progress', 'awaiting_acceptance', 'accepted', 'completed', 'closed', 'cancelled'),
         allowNull: false,
         defaultValue: 'pending',
-        comment: 'Trạng thái bảo trì: pending, approved, in_progress, awaiting_approval, completed, cancelled, closed'
+        comment: 'Trạng thái bảo trì: draft, pending, approved, scheduled, in_progress, awaiting_acceptance, accepted, completed, closed, cancelled'
+    },
+    shift: {
+        type: DataTypes.ENUM('A', 'B', 'C'),
+        allowNull: true,
+        comment: 'Ca làm việc thực hiện bảo trì'
+    },
+    accepted_at: {
+        type: DataTypes.DATE,
+        allowNull: true,
+        comment: 'Thời gian nghiệm thu (QA/Engineering)'
+    },
+    accepted_by: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        comment: 'ID người nghiệm thu'
+    },
+    acceptance_notes: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+        comment: 'Ghi chú nghiệm thu'
+    },
+    handover_confirmed_at: {
+        type: DataTypes.DATE,
+        allowNull: true,
+        comment: 'Thời điểm bàn giao lại xưởng'
+    },
+    handover_confirmed_by: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        comment: 'ID người xác nhận bàn giao'
+    },
+    cancelled_at: {
+        type: DataTypes.DATE,
+        allowNull: true,
+        comment: 'Thời điểm hủy'
+    },
+    cancelled_by: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        comment: 'ID người hủy'
+    },
+    cancel_reason: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+        comment: 'Lý do hủy'
+    },
+    scheduled_by: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        comment: 'ID người lập lịch'
+    },
+    scheduled_at: {
+        type: DataTypes.DATE,
+        allowNull: true,
+        comment: 'Thời điểm lập lịch'
+    },
+    rejection_count: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 0,
+        comment: 'Số lần bị reject acceptance'
+    },
+    rejection_notes: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+        comment: 'Ghi chú các lần reject'
     },
     title: {
         type: DataTypes.STRING(255),

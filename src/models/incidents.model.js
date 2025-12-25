@@ -31,8 +31,66 @@ const Incidents = sequelize.define('incidents', {
         defaultValue: 'medium'
     },
     status: {
-        type: DataTypes.ENUM('reported', 'investigating', 'in_progress', 'resolved', 'closed'),
+        type: DataTypes.ENUM('reported', 'triaged', 'out_of_service', 'assigned', 'in_progress', 'post_fix_check', 'resolved', 'closed', 'cancelled'),
         defaultValue: 'reported'
+    },
+    is_isolated: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+        comment: 'Thiết bị đã được cô lập (out of service)'
+    },
+    isolated_at: {
+        type: DataTypes.DATE,
+        allowNull: true,
+        comment: 'Thời điểm cô lập thiết bị'
+    },
+    isolation_notes: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+        comment: 'Ghi chú về việc cô lập'
+    },
+    post_fix_result: {
+        type: DataTypes.ENUM('pass', 'fail', 'pending'),
+        allowNull: true,
+        defaultValue: 'pending',
+        comment: 'Kết quả kiểm tra sau sửa chữa'
+    },
+    downtime_minutes: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        comment: 'Thời gian downtime tính bằng phút'
+    },
+    capa_required: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+        comment: 'Có yêu cầu CAPA hay không'
+    },
+    capa_actions: {
+        type: DataTypes.JSON,
+        allowNull: true,
+        comment: 'Danh sách hành động CAPA (JSON array)'
+    },
+    triaged_at: {
+        type: DataTypes.DATE,
+        allowNull: true,
+        comment: 'Thời điểm phân loại'
+    },
+    triaged_by: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        comment: 'ID người phân loại'
+    },
+    post_fix_checked_at: {
+        type: DataTypes.DATE,
+        allowNull: true,
+        comment: 'Thời điểm kiểm tra sau sửa chữa'
+    },
+    post_fix_checked_by: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        comment: 'ID người kiểm tra sau sửa chữa'
     },
     reported_by: {
         type: DataTypes.INTEGER,
