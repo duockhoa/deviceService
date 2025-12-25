@@ -592,27 +592,30 @@ const exportTemplate = async (req, res) => {
         // Lấy danh sách các dropdown options
         const categories = await AssetCategories.findAll({ attributes: ['id', 'code', 'name'] });
         const subCategories = await AssetSubCategories.findAll({ attributes: ['id', 'code', 'name', 'category_id'] });
-        const areas = await Areas.findAll({ attributes: ['id', 'code', 'name'] });
+        const areas = await Areas.findAll({ attributes: ['id', 'code', 'name', 'plant_id'] });
+        const plants = await Plants.findAll({ attributes: ['id', 'code', 'name'] });
         const departments = await Departments.findAll({ attributes: ['name'] });
+        const users = await User.findAll({ attributes: ['id', 'name', 'employee_code', 'department'] });
 
         // Tạo template data với 1 row mẫu
         const templateData = [
             {
-                'Mã thiết bị (*)': 'TB-001',
                 'Mã DK (tùy chọn)': 'DK-001',
                 'Tên thiết bị (*)': 'Máy nén khí',
-                'Mã danh mục phụ (*)': subCategories[0]?.code || '',
-                'Khu vực (mã)': areas[0]?.code || '',
-                'Phòng ban': departments[0]?.name || '',
+                'Loại thiết bị (mã) (*)': subCategories[0]?.code || '',
+                'Bộ phận QL (*)': departments[0]?.name || '',
+                'Địa chỉ (mã) (*)': plants[0]?.code || '',
+                'Khu vực (mã) (*)': areas[0]?.code || '',
+                'Người phụ trách (mã NV) (*)': users[0]?.employee_code || '',
                 'Trạng thái': 'active',
                 'Năm sản xuất': '2023',
                 'Nhà sản xuất': 'ABC Company',
-                'Xuất xứ': 'Việt Nam',
+                'Nước sản xuất': 'Việt Nam',
+                'Nhà cung cấp': 'XYZ Supplier',
                 'Model': 'AC-100',
                 'Serial number': 'SN123456',
                 'Thời hạn bảo hành (tháng)': '24',
                 'Ngày hết bảo hành': '2025-12-31',
-                'Nhà cung cấp': 'XYZ Supplier',
                 'Mô tả': 'Thiết bị máy nén khí công suất lớn'
             }
         ];
@@ -694,21 +697,22 @@ const exportTemplate = async (req, res) => {
         // Sheet 1: Thông tin chung thiết bị
         const ws = XLSX.utils.json_to_sheet(templateData);
         ws['!cols'] = [
-            { wch: 20 }, // Mã thiết bị
             { wch: 20 }, // Mã DK (tùy chọn)
             { wch: 30 }, // Tên thiết bị
-            { wch: 20 }, // Mã danh mục phụ
-            { wch: 15 }, // Khu vực
-            { wch: 20 }, // Phòng ban
+            { wch: 20 }, // Loại thiết bị (mã)
+            { wch: 20 }, // Bộ phận QL
+            { wch: 20 }, // Địa chỉ (mã)
+            { wch: 20 }, // Khu vực (mã)
+            { wch: 20 }, // Người phụ trách (mã NV)
             { wch: 15 }, // Trạng thái
             { wch: 15 }, // Năm sản xuất
             { wch: 25 }, // Nhà sản xuất
-            { wch: 15 }, // Xuất xứ
+            { wch: 20 }, // Nước sản xuất
+            { wch: 25 }, // Nhà cung cấp
             { wch: 15 }, // Model
             { wch: 20 }, // Serial
-            { wch: 25 }, // Thời hạn BH
+            { wch: 20 }, // Thời hạn BH
             { wch: 20 }, // Ngày hết BH
-            { wch: 25 }, // Nhà cung cấp
             { wch: 40 }  // Mô tả
         ];
         XLSX.utils.book_append_sheet(wb, ws, 'Thông tin thiết bị');
@@ -743,59 +747,78 @@ const exportTemplate = async (req, res) => {
             { 'Nội dung': '1. SHEET "Thông tin thiết bị":' },
             { 'Nội dung': '   - Điền thông tin cơ bản của thiết bị' },
             { 'Nội dung': '   - Các cột có dấu (*) là bắt buộc' },
-            { 'Nội dung': '   - Cột \"Mã DK (tùy chọn)\": mã nội bộ để chọn thiết bị trong kế hoạch bảo trì; có thể bỏ trống nếu chưa dùng' },
-            { 'Nội dung': '   - Mã thiết bị phải duy nhất, không trùng lặp' },
+            { 'Nội dung': '   - Mã thiết bị (asset_code) sẽ tự động sinh, không cần điền' },
+            { 'Nội dung': '   - Mã DK (tùy chọn): mã nội bộ để chọn thiết bị trong kế hoạch bảo trì' },
+            { 'Nội dung': '   - Người phụ trách: điền mã nhân viên (employee_code)' },
             { 'Nội dung': '' },
             { 'Nội dung': '2. SHEET "Thành phần cấu tạo":' },
             { 'Nội dung': '   - Liệt kê các bộ phận cấu tạo của thiết bị' },
-            { 'Nội dung': '   - Mã thiết bị phải khớp với Sheet "Thông tin thiết bị"' },
+            { 'Nội dung': '   - Mã DK phải khớp với Sheet "Thông tin thiết bị"' },
             { 'Nội dung': '   - Có thể có nhiều dòng cho cùng 1 thiết bị' },
             { 'Nội dung': '' },
             { 'Nội dung': '3. SHEET "Vật tư tiêu hao":' },
             { 'Nội dung': '   - Liệt kê vật tư cần thay thế định kỳ' },
-            { 'Nội dung': '   - Mã thiết bị phải khớp với Sheet "Thông tin thiết bị"' },
+            { 'Nội dung': '   - Mã DK phải khớp với Sheet "Thông tin thiết bị"' },
             { 'Nội dung': '   - Chu kỳ thay thế tính bằng giờ hoạt động' },
             { 'Nội dung': '' },
-            { 'Nội dung': '4. Tham khảo các sheet "Danh mục phụ", "Khu vực", "Phòng ban"' },
-            { 'Nội dung': '   để điền đúng mã/tên vào các cột tương ứng' },
+            { 'Nội dung': '4. Tham khảo các sheet: "Loại thiết bị", "Bộ phận", "Địa chỉ", "Khu vực", "Nhân viên"' },
+            { 'Nội dung': '   để điền đúng mã vào các cột tương ứng' },
             { 'Nội dung': '' },
-            { 'Nội dung': '5. Sau khi điền xong, vào hệ thống chọn Excel > Import dữ liệu' },
+            { 'Nội dung': '5. Sau khi điền xong, vào hệ thống chọn "Import Thiết Bị" > "Import Thiết Bị"' },
             { 'Nội dung': '' },
             { 'Nội dung': '⚠️ LƯU Ý:' },
             { 'Nội dung': '- Không xóa dòng tiêu đề (header)' },
             { 'Nội dung': '- Không thay đổi tên các cột' },
             { 'Nội dung': '- Định dạng ngày: YYYY-MM-DD (VD: 2025-12-31)' },
-            { 'Nội dung': '- Trạng thái chỉ nhận 2 giá trị: active hoặc inactive' }
+            { 'Nội dung': '- Trạng thái: active, inactive, under_maintenance, broken, pending' }
         ];
         const wsInstructions = XLSX.utils.json_to_sheet(instructions);
         wsInstructions['!cols'] = [{ wch: 80 }];
         XLSX.utils.book_append_sheet(wb, wsInstructions, 'Hướng dẫn');
 
-        // Sheet 6: Danh mục phụ reference
+        // Sheet 6: Loại thiết bị (SubCategories) reference
         const subCatData = subCategories.map(sc => ({
-            'Mã danh mục phụ': sc.code,
-            'Tên danh mục phụ': sc.name,
-            'ID danh mục cha': sc.category_id
+            'Mã loại': sc.code,
+            'Tên loại': sc.name,
+            'Nhóm thiết bị': categories.find(c => c.id === sc.category_id)?.name || ''
         }));
         const wsSubCat = XLSX.utils.json_to_sheet(subCatData);
-        XLSX.utils.book_append_sheet(wb, wsSubCat, 'Danh mục phụ');
+        XLSX.utils.book_append_sheet(wb, wsSubCat, 'Loại thiết bị');
 
-        // Sheet 7: Khu vực reference
+        // Sheet 7: Bộ phận reference
+        const deptData = departments.map(d => ({
+            'Tên bộ phận': d.name
+        }));
+        const wsDept = XLSX.utils.json_to_sheet(deptData);
+        XLSX.utils.book_append_sheet(wb, wsDept, 'Bộ phận');
+
+        // Sheet 8: Địa chỉ (Plants) reference
+        const plantData = plants.map(p => ({
+            'Mã địa chỉ': p.code,
+            'Tên địa chỉ': p.name
+        }));
+        const wsPlant = XLSX.utils.json_to_sheet(plantData);
+        XLSX.utils.book_append_sheet(wb, wsPlant, 'Địa chỉ');
+
+        // Sheet 9: Khu vực reference
         const areaData = areas.map(a => ({
             'Mã khu vực': a.code,
-            'Tên khu vực': a.name
+            'Tên khu vực': a.name,
+            'Thuộc địa chỉ': plants.find(p => p.id === a.plant_id)?.name || ''
         }));
         const wsArea = XLSX.utils.json_to_sheet(areaData);
         XLSX.utils.book_append_sheet(wb, wsArea, 'Khu vực');
 
-        // Sheet 8: Phòng ban reference
-        const deptData = departments.map(d => ({
-            'Tên phòng ban': d.name
+        // Sheet 10: Nhân viên (Users) reference
+        const userData = users.map(u => ({
+            'Mã nhân viên': u.employee_code,
+            'Tên nhân viên': u.name,
+            'Bộ phận': u.department
         }));
-        const wsDept = XLSX.utils.json_to_sheet(deptData);
-        XLSX.utils.book_append_sheet(wb, wsDept, 'Phòng ban');
+        const wsUser = XLSX.utils.json_to_sheet(userData);
+        XLSX.utils.book_append_sheet(wb, wsUser, 'Nhân viên');
 
-        // Sheet 9: Thông số kỹ thuật categories reference
+        // Sheet 11: Thông số kỹ thuật categories reference
         const specCategories = await SpecificationCategories.findAll({
             attributes: ['id', 'spec_code', 'spec_name', 'unit', 'data_type'],
             order: [['spec_code', 'ASC']]
@@ -972,8 +995,10 @@ const importFromExcel = async (req, res) => {
 
         // Get lookup data
         const subCategories = await AssetSubCategories.findAll();
-        const areas = await Areas.findAll();
+        const areas = await Areas.findAll({ include: [{ model: Plants, as: 'Plant' }] });
+        const plants = await Plants.findAll();
         const departments = await Departments.findAll();
+        const users = await User.findAll();
         // Process each row
         for (let i = 0; i < mainData.length; i++) {
             const row = mainData[i];
@@ -982,12 +1007,16 @@ const importFromExcel = async (req, res) => {
             try {
                 // Validate required fields (asset_code optional: sẽ auto-generate)
                 const assetName = row['Tên thiết bị'] || row['Tên thiết bị (*)'];
-                const subCatCodeOrName = row['Loại thiết bị'] || row['Loại thiết bị (mã)'];
+                const subCatCodeOrName = row['Loại thiết bị'] || row['Loại thiết bị (mã)'] || row['Loại thiết bị (mã) (*)'];
+                const teamValue = row['Bộ phận'] || row['Bộ phận QL'] || row['Bộ phận QL (*)'];
+                const plantValue = row['Địa chỉ'] || row['Địa chỉ (mã)'] || row['Địa chỉ (mã) (*)'];
+                const areaValue = row['Khu vực'] || row['Khu vực (mã)'] || row['Khu vực (mã) (*)'];
+                const responsibleUserValue = row['Người phụ trách'] || row['Người phụ trách (mã NV)'] || row['Người phụ trách (mã NV) (*)'];
 
-                if (!assetName || !subCatCodeOrName) {
+                if (!assetName || !subCatCodeOrName || !teamValue || !plantValue || !areaValue || !responsibleUserValue) {
                     results.errors.push({
                         row: rowNum,
-                        error: 'Thiếu thông tin bắt buộc (Tên thiết bị, Loại thiết bị)'
+                        error: 'Thiếu thông tin bắt buộc (Tên thiết bị, Loại thiết bị, Bộ phận QL, Địa chỉ, Khu vực, Người phụ trách)'
                     });
                     continue;
                 }
@@ -1016,28 +1045,68 @@ const importFromExcel = async (req, res) => {
                     continue;
                 }
 
-                // Find area_id (optional) by code or name
+                // Find plant_id (required) by code or name
+                let plant_id = null;
+                const plant = plants.find(p =>
+                    p.code?.toUpperCase() === plantValue.toString().trim().toUpperCase() ||
+                    p.name?.toUpperCase() === plantValue.toString().trim().toUpperCase()
+                );
+                if (!plant) {
+                    results.errors.push({
+                        row: rowNum,
+                        error: `Không tìm thấy địa chỉ: ${plantValue}`
+                    });
+                    continue;
+                }
+                plant_id = plant.id;
+
+                // Find area_id (required) by code or name
                 let area_id = null;
-                const areaValue = row['Khu vực'] || row['Khu vực (mã)'];
-                if (areaValue) {
-                    const area = areas.find(a =>
-                        a.code?.toUpperCase() === areaValue.toString().trim().toUpperCase() ||
-                        a.name?.toUpperCase() === areaValue.toString().trim().toUpperCase()
-                    );
-                    if (area) {
-                        area_id = area.id;
-                    }
+                const area = areas.find(a =>
+                    a.code?.toUpperCase() === areaValue.toString().trim().toUpperCase() ||
+                    a.name?.toUpperCase() === areaValue.toString().trim().toUpperCase()
+                );
+                if (!area) {
+                    results.errors.push({
+                        row: rowNum,
+                        error: `Không tìm thấy khu vực: ${areaValue}`
+                    });
+                    continue;
+                }
+                area_id = area.id;
+
+                // Validate area belongs to plant
+                if (area.plant_id !== plant_id) {
+                    results.errors.push({
+                        row: rowNum,
+                        error: `Khu vực "${area.name}" không thuộc địa chỉ "${plant.name}"`
+                    });
+                    continue;
                 }
 
-                // Find team_id (optional) by name
+                // Find team_id (required) by name
                 let team_id = null;
-                const teamValue = row['Bộ phận'];
-                if (teamValue) {
-                    const dept = departments.find(d => d.name?.toUpperCase() === teamValue.toString().trim().toUpperCase());
-                    if (dept) {
-                        team_id = dept.name;
-                    }
+                const dept = departments.find(d => d.name?.toUpperCase() === teamValue.toString().trim().toUpperCase());
+                if (!dept) {
+                    results.errors.push({
+                        row: rowNum,
+                        error: `Không tìm thấy bộ phận: ${teamValue}`
+                    });
+                    continue;
                 }
+                team_id = dept.name;
+
+                // Find responsible_user_id (required) by employee_code
+                let responsible_user_id = null;
+                const user = users.find(u => u.employee_code?.toUpperCase() === responsibleUserValue.toString().trim().toUpperCase());
+                if (!user) {
+                    results.errors.push({
+                        row: rowNum,
+                        error: `Không tìm thấy nhân viên với mã: ${responsibleUserValue}`
+                    });
+                    continue;
+                }
+                responsible_user_id = user.id;
 
                 // Resolve final asset_code (auto-generate if missing)
                 let finalAssetCode = normalizedAssetCode;
@@ -1060,27 +1129,48 @@ const importFromExcel = async (req, res) => {
                     continue;
                 }
 
+                // Get status from Excel (default to 'active')
+                const statusValue = row['Trạng thái']?.toString().trim().toLowerCase();
+                const validStatuses = ['active', 'inactive', 'under_maintenance', 'broken', 'pending'];
+                const finalStatus = validStatuses.includes(statusValue) ? statusValue : 'active';
+
                 // Create asset
                 const asset = await Assets.create({
                     asset_code: finalAssetCode,
                     dk_code: finalDkCode,
                     name: assetName,
                     sub_category_id: subCat.id,
+                    plant_id: plant_id,
                     area_id: area_id,
                     team_id: team_id,
-                    description: row['Ghi chú'] || null,
-                    status: 'active',
+                    responsible_user_id: responsible_user_id,
+                    status: finalStatus,
                     created_by: req.user?.id
                 }, { transaction: t });
 
                 // Create general info if provided
-                const usageDate = excelDateToMySQL(row['Ngày sử dụng']);
-                if (usageDate || row['Model'] || row['Serial']) {
+                const manufactureYear = row['Năm sản xuất'];
+                const manufacturer = row['Nhà sản xuất'];
+                const countryOfOrigin = row['Nước sản xuất'] || row['Xuất xứ'];
+                const supplier = row['Nhà cung cấp'];
+                const model = row['Model'];
+                const serialNumber = row['Serial number'] || row['Serial'];
+                const warrantyMonths = row['Thời hạn bảo hành (tháng)'];
+                const warrantyExpiryDate = excelDateToMySQL(row['Ngày hết bảo hành']);
+                const description = row['Mô tả'];
+
+                if (manufactureYear || manufacturer || countryOfOrigin || supplier || model || serialNumber || warrantyMonths || warrantyExpiryDate || description) {
                     await AssetGeneralInfo.create({
                         asset_id: asset.id,
-                        model: row['Model'] || null,
-                        serial_number: row['Serial'] || null,
-                        description: usageDate ? `Ngày sử dụng: ${usageDate}` : null
+                        manufacture_year: manufactureYear || null,
+                        manufacturer: manufacturer || null,
+                        country_of_origin: countryOfOrigin || null,
+                        supplier: supplier || null,
+                        model: model || null,
+                        serial_number: serialNumber || null,
+                        warranty_period_months: warrantyMonths || null,
+                        warranty_expiry_date: warrantyExpiryDate || null,
+                        description: description || null
                     }, { transaction: t });
                 }
 

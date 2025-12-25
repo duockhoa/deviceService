@@ -17,6 +17,15 @@ const Assets = sequelize.define('assets', {
         },
         comment: 'Loại thiết bị phụ thuộc'
     },
+    plant_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+            model: 'plants',
+            key: 'id'
+        },
+        comment: 'Địa chỉ thiết bị'
+    },
     team_id: {
         type: DataTypes.STRING(255),
         allowNull: true,
@@ -24,6 +33,15 @@ const Assets = sequelize.define('assets', {
             model: 'teams',
             key: 'name'
         }
+    },
+    responsible_user_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+            model: 'users',
+            key: 'id'
+        },
+        comment: 'Người phụ trách thiết bị'
     },
     area_id: {
         type: DataTypes.INTEGER,
@@ -57,7 +75,7 @@ const Assets = sequelize.define('assets', {
         comment: 'Vị trí đặt thiết bị'
     },
     status: {
-        type: DataTypes.ENUM('active', 'inactive'),
+        type: DataTypes.ENUM('active', 'inactive', 'under_maintenance', 'broken', 'pending'),
         allowNull: false,
         defaultValue: 'active',
         comment: 'Trạng thái hoạt động của thiết bị'
