@@ -105,6 +105,48 @@ class SideEffectsService {
     }
 
     /**
+     * Close linked incident when maintenance is closed/accepted
+     */
+    static async closeLinkedIncident(maintenance, context) {
+        try {
+            if (!maintenance.incident_id) return;
+
+            const { Incidents } = require('../models');
+            const incident = await Incidents.findByPk(maintenance.incident_id);
+
+            if (!incident) {
+                console.warn(`Linked incident ${maintenance.incident_id} not found for maintenance ${maintenance.maintenance_code}`);
+                return;
+            }
+
+            // Only close if incident is not already closed/resolved
+            if (incident.status !== 'closed' && incident.status !== 'resolved') {
+                await incident.update({
+                    status: 'resolved',
+                    resolved_date: new Date(),
+                    solution: `Đã xử lý xong qua lệnh bảo trì: ${maintenance.maintenance_code}`,
+                    resolution_notes: `Tự động resolved khi maintenance closed`
+                });
+
+                console.log(`✅ Auto-closed incident ${incident.incident_code} after maintenance ${maintenance.maintenance_code} completed`);
+
+                // Optionally notify
+                await NotificationService.sendNotification({
+                    type: 'incident_resolved',
+                    entityType: 'incident',
+                    entityId: incident.id,
+                    title: `Sự cố đã giải quyết`,
+                    message: `Sự cố ${incident.incident_code} đã được giải quyết qua lệnh bảo trì ${maintenance.maintenance_code}`,
+                    recipients: ['reporter', 'assigned']
+                });
+            }
+        } catch (error) {
+            console.error('Error closing linked incident:', error);
+            // Don't throw, just log - maintenance should still complete
+        }
+    }
+
+    /**
      * Set actual start date for maintenance
      */
     static async setActualStartDate(maintenance, context) {

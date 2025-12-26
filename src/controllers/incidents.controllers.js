@@ -157,6 +157,41 @@ const assignIncident = async (req, res) => {
 };
 
 /**
+ * POST /api/v1/incidents/:id/convert-to-maintenance
+ * Chuyển sự cố thiết bị thành lệnh bảo trì
+ * Tạo maintenance order mới, link incident_id, chuyển status
+ * Chỉ cho incident_category = EQUIPMENT
+ */
+const convertToMaintenance = async (req, res) => {
+    try {
+        const result = await IncidentService.convertToMaintenance(
+            req.params.id,
+            req.body,
+            req.user
+        );
+
+        if (!result.success) {
+            return res.status(result.code || 500).json({
+                success: false,
+                message: result.error
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: 'Đã chuyển sang lệnh bảo trì thành công',
+            data: result.data
+        });
+    } catch (error) {
+        console.error('Error converting to maintenance:', error);
+        return res.status(500).json({
+            success: false,
+            message: error.message || 'Không thể chuyển sang bảo trì'
+        });
+    }
+};
+
+/**
  * POST /api/v1/incidents/:id/start
  * Action: Bắt đầu xử lý
  */
@@ -554,6 +589,7 @@ module.exports = {
     triageIncident,
     isolateIncident,
     assignIncident,
+    convertToMaintenance,
     startIncident,
     submitPostFix,
     postFixCheck,

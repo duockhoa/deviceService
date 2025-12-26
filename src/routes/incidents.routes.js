@@ -37,6 +37,10 @@ router.post('/:id/isolate', checkActionPermission('incident', INCIDENT_ACTIONS.I
 // Phân công kỹ thuật viên (triaged|out_of_service → assigned)
 router.post('/:id/assign', checkActionPermission('incident', INCIDENT_ACTIONS.ASSIGN), incidentController.assignIncident);
 
+// Chuyển sang bảo trì sửa chữa (triaged → converted, tạo maintenance order)
+// Chỉ áp dụng cho incident_category = EQUIPMENT
+router.post('/:id/convert-to-maintenance', incidentController.convertToMaintenance);
+
 // Bắt đầu xử lý (assigned → in_progress)
 router.post('/:id/start', checkActionPermission('incident', INCIDENT_ACTIONS.START), incidentController.startIncident);
 

@@ -317,7 +317,7 @@ const MAINTENANCE_TRANSITIONS = {
             to: MAINTENANCE_STATES.ACCEPTED,
             allowedRoles: [ROLES.QA, ROLES.ENGINEERING, ROLES.ADMIN],
             validate: null,
-            sideEffects: ['setAcceptedDetails', 'notifyManager'],
+            sideEffects: ['setAcceptedDetails', 'closeLinkedIncident', 'notifyManager'],
             systemStatus: SYSTEM_STATUS.TECHNICALLY_COMPLETE,  // SAP PM: TECO (cost locked)
             operationalStatus: null
         },
@@ -335,7 +335,7 @@ const MAINTENANCE_TRANSITIONS = {
             to: MAINTENANCE_STATES.CLOSED,
             allowedRoles: [ROLES.MANAGER, ROLES.ADMIN],
             validate: 'checkSystemStatusGates',  // SAP PM: Cannot modify cost if TECO
-            sideEffects: ['setAssetAVLB', 'setClosedDate', 'notifyProduction'],  // SAP PM: Asset → AVLB
+            sideEffects: ['setAssetAVLB', 'setClosedDate', 'closeLinkedIncident', 'notifyProduction'],  // SAP PM: Asset → AVLB
             systemStatus: SYSTEM_STATUS.TECHNICALLY_COMPLETE,  // SAP PM: Stays TECO
             operationalStatus: OPERATIONAL_STATUS.AVAILABLE
         }

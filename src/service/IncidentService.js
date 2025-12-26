@@ -251,6 +251,11 @@ class IncidentService {
             if (filters.status) where.status = filters.status;
             if (filters.severity) where.severity = filters.severity;
             if (filters.assigned_to) where.assigned_to = filters.assigned_to;
+            
+            // Filter: myReports=true -> only show incidents reported by current user
+            if (filters.myReports === 'true' || filters.myReports === true) {
+                where.reported_by = user.id;
+            }
 
             const incidents = await Incidents.findAll({
                 where,
@@ -276,6 +281,91 @@ class IncidentService {
             return { success: true, data };
         } catch (error) {
             console.error('Error getting incidents:', error);
+            return { success: false, error: error.message, code: 500 };
+        }
+    }
+
+    /**
+     * Chuyển sự cố thiết bị thành lệnh bảo trì
+     * Chỉ áp dụng cho incident_category = EQUIPMENT
+     */
+    static async convertToMaintenance(incidentId, data, user) {
+        try {
+            const Maintenance = require('../models/maintenance.model');
+            
+            // Get incident
+            const incident = await Incidents.findByPk(incidentId, {
+                include: [{ model: Assets, as: 'asset' }]
+            });
+
+            if (!incident) {
+                return { success: false, error: 'Incident not found', code: 404 };
+            }
+
+            // Validate: chỉ EQUIPMENT mới convert được
+            if (incident.incident_category !== 'EQUIPMENT') {
+                return { 
+                    success: false, 
+                    error: 'Chỉ sự cố thiết bị (EQUIPMENT) mới có thể chuyển sang bảo trì', 
+                    code: 400 
+                };
+            }
+
+            // Validate: phải ở trạng thái triaged
+            if (incident.status !== 'triaged') {
+                return { 
+                    success: false, 
+                    error: 'Sự cố phải ở trạng thái "Đã phân loại" (triaged) mới có thể chuyển sang bảo trì', 
+                    code: 400 
+                };
+            }
+
+            // Generate maintenance code
+            const timestamp = Date.now().toString().slice(-6);
+            const maintenance_code = `MT-${timestamp}`;
+
+            // Map severity to priority
+            const priorityMap = {
+                'critical': 'critical',
+                'high': 'high',
+                'medium': 'medium',
+                'low': 'low'
+            };
+
+            // Create maintenance order
+            const maintenance = await Maintenance.create({
+                maintenance_code,
+                asset_id: incident.asset_id,
+                maintenance_type: 'corrective', // Sửa chữa
+                priority: priorityMap[incident.severity] || 'medium',
+                status: 'pending',
+                title: data.maintenance_title || incident.title,
+                description: data.maintenance_description || incident.description,
+                scheduled_date: new Date(),
+                estimated_duration: data.estimated_hours || 4,
+                technician_id: null,
+                incident_id: incidentId, // Link to incident
+                notes: `Chuyển từ sự cố: ${incident.incident_code}. ${data.required_parts ? 'Vật tư: ' + data.required_parts : ''}`,
+                safety_requirements: data.safety_notes || null
+            });
+
+            // Update incident status
+            await incident.update({
+                status: 'converted_to_maintenance',
+                converted_maintenance_id: maintenance.id,
+                converted_at: new Date()
+            });
+
+            return {
+                success: true,
+                data: {
+                    maintenance_code: maintenance.maintenance_code,
+                    maintenance_id: maintenance.id,
+                    incident
+                }
+            };
+        } catch (error) {
+            console.error('Error converting to maintenance:', error);
             return { success: false, error: error.message, code: 500 };
         }
     }
