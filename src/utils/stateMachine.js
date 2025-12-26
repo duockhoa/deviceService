@@ -251,7 +251,7 @@ const MAINTENANCE_TRANSITIONS = {
     [MAINTENANCE_STATES.PENDING]: {
         [MAINTENANCE_ACTIONS.APPROVE]: {
             to: MAINTENANCE_STATES.APPROVED,
-            allowedRoles: [ROLES.MANAGER, ROLES.QA, ROLES.ADMIN],
+            allowedRoles: [ROLES.MANAGER, ROLES.QA, ROLES.ADMIN, ROLES.TECHNICIAN],  // Thêm TECHNICIAN để cho phép approve
             validate: null,
             sideEffects: ['setApprovedDetails', 'notifyPlanner'],
             systemStatus: SYSTEM_STATUS.CREATED,  // SAP PM: Still CRTD
@@ -670,24 +670,56 @@ class StateMachine {
 
 /**
  * Normalize role từ user object
+ * Priority: user.roles array > user.role > position > department
  */
 const normalizeRole = (user) => {
     if (!user) return ROLES.REQUESTER;
     
-    const roleStr = (user.role || user.position || user.title || '').toUpperCase();
+    // Priority 1: Check roles array from user_roles table
+    if (Array.isArray(user.roles) && user.roles.length > 0) {
+        const roleMap = {
+            'ADMIN': ROLES.ADMIN,
+            'MANAGER': ROLES.MANAGER,
+            'TECHNICIAN': ROLES.TECHNICIAN,
+            'QA': ROLES.QA,
+            'ENGINEERING': ROLES.ENGINEERING,
+            'PLANNER': ROLES.PLANNER
+        };
+        
+        // Return highest priority role
+        for (const roleName of user.roles) {
+            const normalized = roleMap[roleName.toUpperCase()];
+            if (normalized) return normalized;
+        }
+    }
     
-    // Map các tên role từ DB sang chuẩn
-    const roleMap = {
-        'MANAGER': ROLES.MANAGER,
-        'TECHNICIAN': ROLES.TECHNICIAN,
-        'QA': ROLES.QA,
-        'ENGINEERING': ROLES.ENGINEERING,
-        'PLANNER': ROLES.PLANNER,
-        'ADMIN': ROLES.ADMIN,
-        'REQUESTER': ROLES.REQUESTER
-    };
-
-    return roleMap[roleStr] || ROLES.REQUESTER;
+    // Priority 2: Check explicit role field
+    if (user.role) {
+        const roleMap = {
+            'MANAGER': ROLES.MANAGER,
+            'TECHNICIAN': ROLES.TECHNICIAN,
+            'QA': ROLES.QA,
+            'ENGINEERING': ROLES.ENGINEERING,
+            'PLANNER': ROLES.PLANNER,
+            'ADMIN': ROLES.ADMIN,
+            'REQUESTER': ROLES.REQUESTER
+        };
+        const normalized = roleMap[(user.role || '').toUpperCase()];
+        if (normalized) return normalized;
+    }
+    
+    // Priority 3: Check position
+    const position = (user.position || '').toUpperCase();
+    if (position.includes('MANAGER') || position.includes('TRƯỞNG')) return ROLES.MANAGER;
+    if (position === 'ADMIN') return ROLES.ADMIN;
+    
+    // Priority 4: Check department
+    const dept = (user.department || '').toUpperCase();
+    if (dept.includes('KỸ THUẬT') || dept.includes('TECHNICAL')) return ROLES.TECHNICIAN;
+    if (dept === 'QA' || dept === 'QC' || dept.includes('CHẤT LƯỢNG')) return ROLES.QA;
+    if (dept.includes('KẾ HOẠCH') || dept.includes('PLANNING')) return ROLES.PLANNER;
+    
+    return ROLES.REQUESTER;
 };
 
 /**

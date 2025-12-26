@@ -130,7 +130,10 @@ const getAssetsByDepartment = async (req, res) => {
         }
 
         const assets = await Assets.findAll({
-            where: { team_id: name },
+            where: { 
+                team_id: name,
+                status: { [require('sequelize').Op.ne]: 'inactive' }
+            },
             include: [
                 {
                     model: Departments,

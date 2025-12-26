@@ -1,6 +1,11 @@
 /**
- * DEPRECATED - Chuyển sang sử dụng stateMachine.js
- * File này giữ lại để tương thích ngược
+ * ⚠️ DEPRECATED - File này không còn sử dụng cho logic phân quyền
+ * 
+ * TẤT CẢ LOGIC PHÂN QUYỀN ĐƯỢC XỬ LÝ TRONG: stateMachine.js
+ * - normalizeRole(user): Xác định role từ user (ưu tiên roles array từ user_roles table)
+ * - transition(): Validate role theo allowedRoles của mỗi action
+ * 
+ * File này giữ lại chỉ để tương thích code cũ.
  */
 const { 
     createStateMachine, 
@@ -12,12 +17,12 @@ const {
 const ENTITIES = {
     incident: 'incident',
     workRequest: 'workRequest',
-    maintenance: 'maintenance' // Thêm maintenance (thay workOrder)
+    maintenance: 'maintenance'
 };
 
 const ROLES = ['REQUESTER', 'TECHNICIAN', 'MANAGER', 'QA', 'ENGINEERING', 'PLANNER', 'ADMIN'];
 
-// Legacy RBAC - giữ để tương thích
+// ⚠️ DEPRECATED - Không dùng object này nữa, dùng stateMachine.js
 const WORKFLOW_RBAC = {
     incident: {
         reported: {

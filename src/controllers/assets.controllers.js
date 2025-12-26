@@ -18,10 +18,13 @@ const generateAssetCode = async () => {
 };
 
 
-// GET /api/assets - Lấy tất cả assets
+// GET /api/assets - Lấy tất cả assets (loại trừ inactive)
 const getAllAssets = async (req, res) => {
     try {
         const assets = await Assets.findAll({
+            where: {
+                status: { [Op.ne]: 'inactive' }
+            },
             include: [
                 { 
                     model: AssetSubCategories, 
@@ -333,7 +336,10 @@ const getAssetsByArea = async (req, res) => {
         const { areaId } = req.params;
 
         const assets = await Assets.findAll({
-            where: { area_id: areaId },
+            where: { 
+                area_id: areaId,
+                status: { [Op.ne]: 'inactive' }
+            },
             include: [
                 { 
                     model: AssetSubCategories, 
@@ -375,7 +381,10 @@ const getAssetsBySubCategory = async (req, res) => {
         const { subCategoryId } = req.params;
 
         const assets = await Assets.findAll({
-            where: { sub_category_id: subCategoryId },
+            where: { 
+                sub_category_id: subCategoryId,
+                status: { [Op.ne]: 'inactive' }
+            },
             include: [
                 { 
                     model: AssetSubCategories, 
@@ -427,7 +436,8 @@ const getAssetsByCategory = async (req, res) => {
             where: { 
                 sub_category_id: {
                     [require('sequelize').Op.in]: subCategoryIds
-                }
+                },
+                status: { [Op.ne]: 'inactive' }
             },
             include: [
                 { 
@@ -470,7 +480,10 @@ const getAssetsByDepartment = async (req, res) => {
         const { departmentName } = req.params;
 
         const assets = await Assets.findAll({
-            where: { team_id: departmentName },
+            where: { 
+                team_id: departmentName,
+                status: { [Op.ne]: 'inactive' }
+            },
             include: [
                 { 
                     model: AssetSubCategories, 
@@ -511,17 +524,17 @@ const searchAssets = async (req, res) => {
     try {
         const { query, category_id, sub_category_id, team_id, area_id } = req.query;
 
-        let whereCondition = {};
+        let whereCondition = {
+            status: { [Op.ne]: 'inactive' }
+        };
 
         if (query) {
-            whereCondition = {
-                [require('sequelize').Op.or]: [
-                    { name: { [require('sequelize').Op.like]: `%${query}%` } },
-                    { dk_code: { [require('sequelize').Op.like]: `%${query}%` } },
-                    { asset_code: { [require('sequelize').Op.like]: `%${query}%` } },
-                    { description: { [require('sequelize').Op.like]: `%${query}%` } }
-                ]
-            };
+            whereCondition[Op.or] = [
+                { name: { [Op.like]: `%${query}%` } },
+                { dk_code: { [Op.like]: `%${query}%` } },
+                { asset_code: { [Op.like]: `%${query}%` } },
+                { description: { [Op.like]: `%${query}%` } }
+            ];
         }
 
         if (sub_category_id) {
@@ -533,7 +546,7 @@ const searchAssets = async (req, res) => {
             });
             const subCategoryIds = subCategories.map(sc => sc.id);
             whereCondition.sub_category_id = {
-                [require('sequelize').Op.in]: subCategoryIds
+                [Op.in]: subCategoryIds
             };
         }
 

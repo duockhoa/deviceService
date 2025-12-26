@@ -1,4 +1,5 @@
 const axios = require('../service/AuthService/authAxios');
+const { User, UserRole, Role } = require('../models');
 
 // Middleware to check authentication
 const authMiddleware = async (req, res, next) => {
@@ -37,13 +38,40 @@ const authMiddleware = async (req, res, next) => {
     });
 
     if (response.data.user) {
-      req.user = response.data.user; // Attach user info to the request object
+      const userId = response.data.user.id;
+      
+      // Load full user with roles from database
+      const userWithRoles = await User.findByPk(userId, {
+        include: [{
+          model: UserRole,
+          as: 'userRoles',
+          include: [{
+            model: Role,
+            as: 'role',
+            where: { is_active: 1 }
+          }]
+        }]
+      });
+      
+      if (userWithRoles) {
+        // Attach user info with roles
+        req.user = {
+          ...response.data.user,
+          department: userWithRoles.department,
+          position: userWithRoles.position,
+          roles: userWithRoles.userRoles?.map(ur => ur.role.role_name) || []
+        };
+      } else {
+        req.user = response.data.user;
+      }
+      
       // Token is valid, proceed to the next middleware or route handler
       next();
     } else {
       return res.status(401).json({ message: 'Invalid token' });
     }
   } catch (error) {
+    console.error('authMiddleware error:', error);
     return res.status(401).json({ message: 'Authentication service error', error: error.message });
   }
 };

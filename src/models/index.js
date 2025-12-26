@@ -806,11 +806,25 @@ User.belongsToMany(Role, {
     otherKey: 'role_id',
     as: 'roles'
 });
+User.hasMany(UserRole, {
+    foreignKey: 'user_id',
+    as: 'userRoles'
+});
 Role.belongsToMany(User, {
     through: UserRole,
     foreignKey: 'role_id',
     otherKey: 'user_id',
     as: 'users'
+});
+
+// UserRole associations
+UserRole.belongsTo(Role, {
+    foreignKey: 'role_id',
+    as: 'role'
+});
+UserRole.belongsTo(User, {
+    foreignKey: 'user_id',
+    as: 'user'
 });
 
 // UserRole - User (assigned_by)

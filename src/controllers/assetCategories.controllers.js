@@ -217,7 +217,12 @@ const deleteAssetCategory = async (req, res) => {
                     model: AssetSubCategories, 
                     as: 'SubCategories',
                     include: [
-                        { model: Assets, as: 'Assets' }
+                        { 
+                            model: Assets, 
+                            as: 'Assets',
+                            where: { status: { [require('sequelize').Op.ne]: 'inactive' } },
+                            required: false
+                        }
                     ]
                 }
             ]
@@ -230,7 +235,7 @@ const deleteAssetCategory = async (req, res) => {
             });
         }
 
-        // Đếm tổng số assets thuộc category này (thông qua sub categories)
+        // Đếm tổng số assets thuộc category này (thông qua sub categories, chỉ đếm active)
         let totalAssets = 0;
         if (category.SubCategories) {
             totalAssets = category.SubCategories.reduce((sum, subCategory) => {
@@ -241,7 +246,7 @@ const deleteAssetCategory = async (req, res) => {
         if (totalAssets > 0) {
             return res.status(409).json({
                 success: false,
-                message: `Cannot delete category. It has ${totalAssets} asset(s) in its sub-categories.`
+                message: `Cannot delete category. It has ${totalAssets} active asset(s) in its sub-categories.`
             });
         }
 

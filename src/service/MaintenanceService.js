@@ -126,7 +126,25 @@ class MaintenanceService {
                 include: [
                     { model: Assets, as: 'asset' },
                     { model: User, as: 'technician', attributes: ['id', 'name', 'email'] },
-                    { model: User, as: 'creator', attributes: ['id', 'name'] }
+                    { model: User, as: 'creator', attributes: ['id', 'name'] },
+                    { 
+                        model: require('../models').MaintenanceWorkTask, 
+                        as: 'workTasks' 
+                    },
+                    { 
+                        model: require('../models').MaintenanceChecklist, 
+                        as: 'checklists' 
+                    },
+                    { 
+                        model: require('../models').MaintenanceConsumables, 
+                        as: 'maintenanceConsumables',
+                        include: [
+                            {
+                                model: require('../models').AssetConsumables,
+                                as: 'assetConsumable'
+                            }
+                        ]
+                    }
                 ]
             });
 

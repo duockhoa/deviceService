@@ -436,7 +436,8 @@ class CalibrationService {
             where: {
                 requires_calibration: true,
                 next_due_at: { [Op.lt]: new Date() },
-                calibration_status: { [Op.ne]: 'in_calibration' }
+                calibration_status: { [Op.ne]: 'in_calibration' },
+                status: { [Op.ne]: 'inactive' }
             },
             include: [
                 {
@@ -467,7 +468,8 @@ class CalibrationService {
                     [Op.gte]: new Date(),
                     [Op.lte]: threshold
                 },
-                calibration_status: { [Op.notIn]: ['in_calibration', 'overdue'] }
+                calibration_status: { [Op.notIn]: ['in_calibration', 'overdue'] },
+                status: { [Op.ne]: 'inactive' }
             }
         });
         
@@ -551,14 +553,20 @@ class CalibrationService {
      * Get compliance report
      */
     static async getComplianceReport(from, to) {
-        // Total assets requiring calibration
-        const totalAssets = await Asset.count({ where: { requires_calibration: true } });
+        // Total assets requiring calibration (only active)
+        const totalAssets = await Asset.count({ 
+            where: { 
+                requires_calibration: true,
+                status: { [Op.ne]: 'inactive' }
+            } 
+        });
         
         // Valid calibrations
         const validAssets = await Asset.count({
             where: {
                 requires_calibration: true,
-                calibration_status: 'valid'
+                calibration_status: 'valid',
+                status: { [Op.ne]: 'inactive' }
             }
         });
         
@@ -566,7 +574,8 @@ class CalibrationService {
         const overdueAssets = await Asset.count({
             where: {
                 requires_calibration: true,
-                calibration_status: 'overdue'
+                calibration_status: 'overdue',
+                status: { [Op.ne]: 'inactive' }
             }
         });
         
@@ -574,7 +583,8 @@ class CalibrationService {
         const dueSoonAssets = await Asset.count({
             where: {
                 requires_calibration: true,
-                calibration_status: 'due_soon'
+                calibration_status: 'due_soon',
+                status: { [Op.ne]: 'inactive' }
             }
         });
         

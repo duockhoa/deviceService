@@ -410,7 +410,7 @@ const getMyWork = async (req, res) => {
             where: {
                 technician_id: req.user.id,
                 is_deleted: false,
-                status: ['scheduled', 'in_progress', 'awaiting_acceptance']
+                status: ['pending', 'approved', 'scheduled', 'in_progress', 'awaiting_acceptance']
             },
             include: [
                 { model: Assets, as: 'asset', attributes: ['id', 'name', 'asset_code'] },

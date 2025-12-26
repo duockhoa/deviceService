@@ -1,12 +1,16 @@
-// Simple department-based guard. Allows dev team IDs by default.
-const DEV_TEAM_IDS = [596, 947];
+/**
+ * Department-based guard - Kiểm tra phòng ban
+ * Admin role bypass tự động (không hardcode user IDs)
+ */
+const { normalizeRole, ROLES } = require('../utils/stateMachine');
 
 const departmentGuard = (allowedDepartments = []) => {
     return (req, res, next) => {
         const user = req.user || {};
 
-        // Dev team bypass
-        if (DEV_TEAM_IDS.includes(user.id)) {
+        // Admin role bypass (dùng RBAC thay vì hardcode IDs)
+        const userRole = normalizeRole(user);
+        if (userRole === ROLES.ADMIN) {
             return next();
         }
 

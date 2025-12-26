@@ -399,8 +399,11 @@ const generateTemplate = async (req, res) => {
         // Sheet 5: Danh sách thiết bị
         const wsAssets = wb.addWorksheet('Danh sách thiết bị');
         
-        // Lấy danh sách thiết bị từ database
+        // Lấy danh sách thiết bị từ database (chỉ active)
         const assetsList = await Assets.findAll({
+            where: {
+                status: { [Op.ne]: 'inactive' }
+            },
             include: [
                 {
                     model: require('../models').AssetSubCategories,
@@ -578,7 +581,10 @@ const importPreview = async (req, res) => {
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const rawRows = xlsx.utils.sheet_to_json(sheet, { defval: '' });
 
-        const assets = await Assets.findAll({ attributes: ['id', 'asset_code', 'name'] });
+        const assets = await Assets.findAll({ 
+            where: { status: { [Op.ne]: 'inactive' } },
+            attributes: ['id', 'asset_code', 'name'] 
+        });
         const assetMap = assets.reduce((map, a) => {
             if (a.asset_code) map[a.asset_code.trim().toUpperCase()] = a.id;
             return map;

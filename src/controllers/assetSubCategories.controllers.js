@@ -215,7 +215,12 @@ const deleteAssetSubCategory = async (req, res) => {
         const { id } = req.params;
 
         const subCategory = await AssetSubCategories.findByPk(id, {
-            include: [{ model: Assets, as: 'Assets' }]
+            include: [{ 
+                model: Assets, 
+                as: 'Assets',
+                where: { status: { [require('sequelize').Op.ne]: 'inactive' } },
+                required: false
+            }]
         });
 
         if (!subCategory) {
@@ -225,11 +230,11 @@ const deleteAssetSubCategory = async (req, res) => {
             });
         }
 
-        // Kiểm tra xem có asset nào đang sử dụng sub category này không
+        // Kiểm tra xem có asset nào đang sử dụng sub category này không (chỉ đếm active assets)
         if (subCategory.Assets && subCategory.Assets.length > 0) {
             return res.status(409).json({
                 success: false,
-                message: `Cannot delete sub category. It has ${subCategory.Assets.length} asset(s) assigned to it.`
+                message: `Cannot delete sub category. It has ${subCategory.Assets.length} active asset(s) assigned to it.`
             });
         }
 

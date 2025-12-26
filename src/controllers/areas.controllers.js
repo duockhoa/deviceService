@@ -238,14 +238,19 @@ const updateArea = async (req, res) => {
     }
 };
 
-// DELETE /api/areas/:id - Xóa area (chỉ kiểm tra Assets)
+// DELETE /api/areas/:id - Xóa area (chỉ kiểm tra Active Assets)
 const deleteArea = async (req, res) => {
     try {
         const { id } = req.params;
 
         const area = await Areas.findByPk(id, {
             include: [
-                { model: Assets, as: 'Assets' }
+                { 
+                    model: Assets, 
+                    as: 'Assets',
+                    where: { status: { [require('sequelize').Op.ne]: 'inactive' } },
+                    required: false
+                }
             ]
         });
 
@@ -256,11 +261,11 @@ const deleteArea = async (req, res) => {
             });
         }
 
-        // Chỉ kiểm tra assets
+        // Chỉ kiểm tra active assets
         if (area.Assets && area.Assets.length > 0) {
             return res.status(409).json({
                 success: false,
-                message: `Cannot delete area. It has ${area.Assets.length} asset(s) assigned to it.`
+                message: `Cannot delete area. It has ${area.Assets.length} active asset(s) assigned to it.`
             });
         }
 
@@ -341,7 +346,10 @@ const getAssetsByArea = async (req, res) => {
         }
 
         const assets = await Assets.findAll({
-            where: { area_id: id },
+            where: { 
+                area_id: id,
+                status: { [require('sequelize').Op.ne]: 'inactive' }
+            },
             include: [
                 {
                     model: Areas,
