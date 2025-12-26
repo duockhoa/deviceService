@@ -41,8 +41,18 @@ class IncidentService {
             // Prepare context
             const context = { user: { ...user, role }, payload };
 
-            // Execute transition
-            const transitionResult = sm.transition(incident, action, context);
+            // Execute transition (chỉ update status trong memory, chưa save)
+            const transitionResult = await sm.transition(incident, action, context);
+
+            // Check if transition failed
+            if (!transitionResult.success) {
+                await transaction.rollback();
+                return {
+                    success: false,
+                    error: transitionResult.message || 'Transition failed',
+                    code: 400
+                };
+            }
 
             // Update incident với fields từ payload
             if (payload.severity) incident.severity = payload.severity;
@@ -54,17 +64,14 @@ class IncidentService {
             if (payload.cost) incident.cost = payload.cost;
             if (payload.notes) incident.notes = payload.notes;
 
-            // Execute side effects TRƯỚC KHI lưu
+            // Execute side effects
             await SideEffectsService.executeSideEffects(
                 transitionResult.sideEffects,
                 incident,
                 context
             );
 
-            // Update status
-            incident.status = transitionResult.newState;
-
-            // Save incident
+            // Save incident với transaction (status đã được set bởi stateMachine)
             await incident.save({ transaction });
 
             // Log audit

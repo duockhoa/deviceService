@@ -610,7 +610,7 @@ class StateMachine {
                 ? transition.sideEffects(context)
                 : (transition.sideEffects || []);
 
-            // Apply state change
+            // Apply state change (chỉ update trong memory, không save)
             record.status = nextState;
             
             // Apply other context fields to record AFTER validation passes
@@ -621,7 +621,8 @@ class StateMachine {
                 }
             });
             
-            await record.save();
+            // KHÔNG save ở đây - để caller save với transaction
+            // await record.save();
 
             return {
                 success: true,

@@ -46,8 +46,18 @@ class MaintenanceService {
             // Prepare context
             const context = { user: { ...user, role }, payload };
 
-            // Execute transition
-            const transitionResult = sm.transition(maintenance, action, context);
+            // Execute transition (chỉ update status trong memory, chưa save)
+            const transitionResult = await sm.transition(maintenance, action, context);
+
+            // Check if transition failed
+            if (!transitionResult.success) {
+                await transaction.rollback();
+                return {
+                    success: false,
+                    error: transitionResult.message || 'Transition failed',
+                    code: 400
+                };
+            }
 
             // Update maintenance với fields từ payload
             if (payload.technician_id) maintenance.technician_id = payload.technician_id;
@@ -56,18 +66,17 @@ class MaintenanceService {
             if (payload.notes) maintenance.notes = payload.notes;
             if (payload.actual_duration) maintenance.actual_duration = payload.actual_duration;
             if (payload.cost) maintenance.cost = payload.cost;
+            if (payload.approval_comment) maintenance.approval_comment = payload.approval_comment;
+            if (payload.scheduled_end) maintenance.scheduled_end = new Date(payload.scheduled_end);
 
-            // Execute side effects TRƯỚC KHI lưu
+            // Execute side effects
             await SideEffectsService.executeSideEffects(
                 transitionResult.sideEffects,
                 maintenance,
                 context
             );
 
-            // Update status
-            maintenance.status = transitionResult.newState;
-
-            // Save maintenance
+            // Save maintenance với transaction (status đã được set bởi stateMachine)
             await maintenance.save({ transaction });
 
             // Log audit
