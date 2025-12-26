@@ -30,6 +30,47 @@ const Incidents = sequelize.define('incidents', {
         type: DataTypes.ENUM('low', 'medium', 'high', 'critical'),
         defaultValue: 'medium'
     },
+    notification_type: {
+        type: DataTypes.ENUM('M1', 'M2', 'M3', 'M4'),
+        allowNull: true,
+        comment: 'SAP PM: M1=Breakdown, M2=Malfunction, M3=Request, M4=Activity'
+    },
+    incident_category: {
+        type: DataTypes.ENUM('EQUIPMENT', 'FACILITY', 'SYSTEM', 'OPERATION'),
+        allowNull: false,
+        defaultValue: 'EQUIPMENT',
+        comment: 'EQUIPMENT=Thiết bị, FACILITY=Nhà xưởng, SYSTEM=Hệ thống, OPERATION=Vận hành'
+    },
+    facility_type: {
+        type: DataTypes.ENUM('building_structure', 'roof', 'wall', 'floor', 'door_window', 'lighting', 'restroom', 'office', 'warehouse', 'workshop', 'parking', 'landscape', 'other'),
+        allowNull: true,
+        comment: 'Loại nhà xưởng/cơ sở hạ tầng'
+    },
+    system_type: {
+        type: DataTypes.ENUM('electrical', 'water', 'compressed_air', 'hvac', 'fire_protection', 'it_network', 'cctv_security', 'telephone', 'waste_treatment', 'steam', 'gas', 'other'),
+        allowNull: true,
+        comment: 'Loại hệ thống'
+    },
+    operation_type: {
+        type: DataTypes.ENUM('support_request', 'inspection', 'cleaning', 'setup', 'training', 'consultation', 'documentation', 'other'),
+        allowNull: true,
+        comment: 'Loại yêu cầu vận hành'
+    },
+    building: {
+        type: DataTypes.STRING(100),
+        allowNull: true,
+        comment: 'Tòa nhà/Khu vực'
+    },
+    floor: {
+        type: DataTypes.STRING(50),
+        allowNull: true,
+        comment: 'Tầng'
+    },
+    room: {
+        type: DataTypes.STRING(100),
+        allowNull: true,
+        comment: 'Phòng/Khu vực cụ thể'
+    },
     status: {
         type: DataTypes.ENUM('reported', 'triaged', 'out_of_service', 'assigned', 'in_progress', 'post_fix_check', 'resolved', 'closed', 'cancelled'),
         defaultValue: 'reported'
@@ -70,6 +111,26 @@ const Incidents = sequelize.define('incidents', {
         type: DataTypes.INTEGER,
         allowNull: true,
         comment: 'ID người phân loại'
+    },
+    assigned_at: {
+        type: DataTypes.DATE,
+        allowNull: true,
+        comment: 'Thời điểm phân công kỹ thuật viên'
+    },
+    started_at: {
+        type: DataTypes.DATE,
+        allowNull: true,
+        comment: 'Thời điểm bắt đầu xử lý'
+    },
+    submitted_for_check_at: {
+        type: DataTypes.DATE,
+        allowNull: true,
+        comment: 'Thời điểm gửi kiểm tra'
+    },
+    post_fix_status: {
+        type: DataTypes.ENUM('pass', 'fail'),
+        allowNull: true,
+        comment: 'Kết quả kiểm tra (pass/fail)'
     },
     post_fix_checked_at: {
         type: DataTypes.DATE,

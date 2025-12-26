@@ -14,6 +14,12 @@ const { INCIDENT_ACTIONS } = require('../utils/stateMachine');
 // Lấy danh sách incidents
 router.get('/', canViewEntity, incidentController.getAllIncidents);
 
+// Báo cáo thống kê sự cố - PHẢI ĐỨNG TRƯỚC :id
+router.get('/reports', incidentController.getIncidentReports);
+
+// Xuất báo cáo Excel
+router.get('/reports/export', incidentController.exportIncidentReports);
+
 // Lấy chi tiết incident
 router.get('/:id', canViewEntity, incidentController.getIncidentById);
 

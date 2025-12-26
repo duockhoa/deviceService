@@ -5,6 +5,10 @@
 
 const IncidentService = require('../service/IncidentService');
 const { INCIDENT_ACTIONS } = require('../utils/stateMachine');
+const { Op } = require('sequelize');
+const Incidents = require('../models/incidents.model');
+const User = require('../models/user.model');
+const Assets = require('../models/assets.model');
 
 // ==================== READ OPERATIONS ====================
 
@@ -381,11 +385,170 @@ const deleteIncident = async (req, res) => {
     }
 };
 
+/**
+ * GET /api/v1/incidents/reports
+ * Báo cáo thống kê sự cố
+ */
+const getIncidentReports = async (req, res) => {
+    try {
+        const { startDate, endDate, technician } = req.query;
+        
+        const whereClause = {
+            reported_date: {
+                [Op.between]: [
+                    new Date(startDate || new Date().setDate(new Date().getDate() - 30)),
+                    new Date(endDate || new Date())
+                ]
+            }
+        };
+
+        if (technician && technician !== 'all') {
+            whereClause.assigned_to = technician;
+        }
+
+        const incidents = await Incidents.findAll({
+            where: whereClause,
+            include: [
+                { model: User, as: 'assigned_technician', attributes: ['id', 'name'] },
+                { model: User, as: 'reporter', attributes: ['id', 'name'] },
+                { model: Assets, as: 'asset', attributes: ['id', 'name', 'asset_code'] }
+            ]
+        });
+
+        // Calculate metrics
+        const responseTimes = [];
+        const resolutionTimes = [];
+        const technicianStats = {};
+
+        incidents.forEach(incident => {
+            // Response time: reported_date → triaged_at
+            if (incident.triaged_at) {
+                const responseHours = (new Date(incident.triaged_at) - new Date(incident.reported_date)) / (1000 * 60 * 60);
+                responseTimes.push(responseHours);
+            }
+
+            // Resolution time: reported_date → resolved_date
+            if (incident.resolved_date) {
+                const resolutionHours = (new Date(incident.resolved_date) - new Date(incident.reported_date)) / (1000 * 60 * 60);
+                resolutionTimes.push(resolutionHours);
+            }
+
+            // Technician stats
+            const techId = incident.assigned_to;
+            if (techId) {
+                if (!technicianStats[techId]) {
+                    technicianStats[techId] = {
+                        id: techId,
+                        name: incident.assigned_technician?.name || 'N/A',
+                        total: 0,
+                        resolved: 0,
+                        totalTime: 0,
+                        passCount: 0,
+                        failCount: 0
+                    };
+                }
+                
+                technicianStats[techId].total++;
+                
+                if (incident.status === 'resolved' || incident.status === 'closed') {
+                    technicianStats[techId].resolved++;
+                    if (incident.resolved_date) {
+                        const hours = (new Date(incident.resolved_date) - new Date(incident.reported_date)) / (1000 * 60 * 60);
+                        technicianStats[techId].totalTime += hours;
+                    }
+                }
+
+                if (incident.post_fix_status === 'pass') {
+                    technicianStats[techId].passCount++;
+                } else if (incident.post_fix_status === 'fail') {
+                    technicianStats[techId].failCount++;
+                }
+            }
+        });
+
+        // Calculate averages
+        const avgResponseTime = responseTimes.length > 0
+            ? (responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length).toFixed(1)
+            : 0;
+
+        const avgResolutionTime = resolutionTimes.length > 0
+            ? (resolutionTimes.reduce((a, b) => a + b, 0) / resolutionTimes.length).toFixed(1)
+            : 0;
+
+        const totalIncidents = incidents.length;
+        const resolvedIncidents = incidents.filter(i => i.status === 'resolved' || i.status === 'closed').length;
+        const resolvedRate = totalIncidents > 0 ? ((resolvedIncidents / totalIncidents) * 100).toFixed(0) : 0;
+
+        // Format technician stats
+        const technicianStatsArray = Object.values(technicianStats).map(tech => ({
+            name: tech.name,
+            total: tech.total,
+            resolved: tech.resolved,
+            avgTime: tech.resolved > 0 ? (tech.totalTime / tech.resolved).toFixed(1) + 'h' : 'N/A',
+            passRate: (tech.passCount + tech.failCount) > 0 
+                ? ((tech.passCount / (tech.passCount + tech.failCount)) * 100).toFixed(0) + '%'
+                : 'N/A',
+            rating: tech.total > 0 ? Math.min(5, 3 + (tech.passCount / tech.total) * 2).toFixed(1) : 'N/A'
+        }));
+
+        // Get unique technicians
+        const uniqueTechIds = [...new Set(incidents.map(i => i.assigned_to).filter(Boolean))];
+        const technicians = await User.findAll({
+            attributes: ['id', 'name'],
+            where: { id: { [Op.in]: uniqueTechIds } }
+        });
+
+        res.json({
+            success: true,
+            data: {
+                avgResponseTime: avgResponseTime + 'h',
+                avgResolutionTime: avgResolutionTime + 'h',
+                totalIncidents,
+                resolvedIncidents,
+                resolvedRate: resolvedRate + '%',
+                technicianStats: technicianStatsArray,
+                technicians: technicians.map(t => ({ id: t.id, name: t.name }))
+            }
+        });
+
+    } catch (error) {
+        console.error('Error generating incident reports:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Không thể tạo báo cáo',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * GET /api/v1/incidents/reports/export
+ * Xuất báo cáo Excel
+ */
+const exportIncidentReports = async (req, res) => {
+    try {
+        res.status(501).json({
+            success: false,
+            message: 'Tính năng xuất Excel đang được phát triển'
+        });
+    } catch (error) {
+        console.error('Error exporting report:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Không thể xuất báo cáo'
+        });
+    }
+};
+
 module.exports = {
     // Read operations
     getAllIncidents,
     getIncidentById,
     createIncident,
+    
+    // Reports
+    getIncidentReports,
+    exportIncidentReports,
     
     // Action endpoints
     triageIncident,

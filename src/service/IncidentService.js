@@ -163,9 +163,36 @@ class IncidentService {
         try {
             const incidentCode = await this.buildIncidentCode();
 
+            // Validate category-specific required fields
+            const category = data.incident_category || 'EQUIPMENT';
+            
+            if (category === 'EQUIPMENT' && !data.asset_id) {
+                throw new Error('Thiết bị là bắt buộc đối với sự cố thiết bị');
+            }
+            
+            if (category === 'FACILITY' && !data.facility_type) {
+                throw new Error('Loại cơ sở là bắt buộc đối với sự cố nhà xưởng');
+            }
+            
+            if (category === 'SYSTEM' && !data.system_type) {
+                throw new Error('Loại hệ thống là bắt buộc đối với sự cố hệ thống');
+            }
+            
+            if (category === 'OPERATION' && !data.operation_type) {
+                throw new Error('Loại yêu cầu là bắt buộc đối với sự cố vận hành');
+            }
+
             const incident = await Incidents.create({
                 incident_code: incidentCode,
-                asset_id: data.asset_id || null,
+                incident_category: category,
+                notification_type: data.notification_type || null,
+                asset_id: category === 'EQUIPMENT' ? data.asset_id : null,
+                facility_type: category === 'FACILITY' ? data.facility_type : null,
+                system_type: category === 'SYSTEM' ? data.system_type : null,
+                operation_type: category === 'OPERATION' ? data.operation_type : null,
+                building: data.building || null,
+                floor: data.floor || null,
+                room: data.room || null,
                 title: data.title,
                 description: data.description || null,
                 severity: data.severity || 'medium',
