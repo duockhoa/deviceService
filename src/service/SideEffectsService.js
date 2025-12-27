@@ -242,6 +242,32 @@ class SideEffectsService {
     }
 
     /**
+     * Notify reporter when incident status changes
+     */
+    static async notifyReporter(incident, context) {
+        try {
+            if (incident.reported_by) {
+                const statusMessages = {
+                    'in_progress': 'đang được xử lý',
+                    'resolved': 'đã được giải quyết',
+                    'closed': 'đã được đóng'
+                };
+
+                await NotificationService.sendNotification({
+                    type: 'incident_status_update',
+                    entityType: 'incident',
+                    entityId: incident.id,
+                    title: `Cập nhật sự cố ${incident.incident_code}`,
+                    message: `Sự cố của bạn ${statusMessages[incident.status] || 'đã được cập nhật'}`,
+                    userId: incident.reported_by
+                });
+            }
+        } catch (error) {
+            console.error('Error notifying reporter:', error);
+        }
+    }
+
+    /**
      * Notify QA for post-fix check or acceptance
      */
     static async notifyQA(record, context) {

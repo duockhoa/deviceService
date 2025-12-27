@@ -26,35 +26,23 @@ router.get('/:id', canViewEntity, incidentController.getIncidentById);
 // Tạo incident mới
 router.post('/', incidentController.createIncident);
 
-// ==================== ACTION ENDPOINTS ====================
+// ==================== ACTION ENDPOINTS (SIMPLIFIED) ====================
 
-// Phân loại sự cố (reported → triaged)
-router.post('/:id/triage', checkActionPermission('incident', INCIDENT_ACTIONS.TRIAGE), incidentController.triageIncident);
+// Tiếp nhận và xử lý sự cố (reported → in_progress)
+router.post('/:id/acknowledge', checkActionPermission('incident', INCIDENT_ACTIONS.ACKNOWLEDGE), incidentController.acknowledgeIncident);
 
-// Cô lập thiết bị (triaged → out_of_service)
-router.post('/:id/isolate', checkActionPermission('incident', INCIDENT_ACTIONS.ISOLATE), incidentController.isolateIncident);
-
-// Phân công kỹ thuật viên (triaged|out_of_service → assigned)
-router.post('/:id/assign', checkActionPermission('incident', INCIDENT_ACTIONS.ASSIGN), incidentController.assignIncident);
-
-// Chuyển sang bảo trì sửa chữa (triaged → converted, tạo maintenance order)
-// Chỉ áp dụng cho incident_category = EQUIPMENT
-router.post('/:id/convert-to-maintenance', incidentController.convertToMaintenance);
-
-// Bắt đầu xử lý (assigned → in_progress)
-router.post('/:id/start', checkActionPermission('incident', INCIDENT_ACTIONS.START), incidentController.startIncident);
-
-// Gửi kiểm tra sau sửa chữa (in_progress → post_fix_check)
-router.post('/:id/submit-post-fix', checkActionPermission('incident', INCIDENT_ACTIONS.SUBMIT_POST_FIX), incidentController.submitPostFix);
-
-// Kiểm tra sau sửa chữa (post_fix_check → resolved|in_progress)
-router.post('/:id/post-fix-check', checkActionPermission('incident', INCIDENT_ACTIONS.POST_FIX_CHECK), incidentController.postFixCheck);
+// Đánh dấu đã giải quyết (in_progress → resolved)
+router.post('/:id/resolve', checkActionPermission('incident', INCIDENT_ACTIONS.RESOLVE), incidentController.resolveIncident);
 
 // Đóng sự cố (resolved → closed)
 router.post('/:id/close', checkActionPermission('incident', INCIDENT_ACTIONS.CLOSE), incidentController.closeIncident);
 
 // Hủy sự cố (reported → cancelled)
 router.post('/:id/cancel', checkActionPermission('incident', INCIDENT_ACTIONS.CANCEL), incidentController.cancelIncident);
+
+// Chuyển sang bảo trì sửa chữa (tạo maintenance từ incident)
+// Chỉ áp dụng cho incident_category = EQUIPMENT
+router.post('/:id/convert-to-maintenance', incidentController.convertToMaintenance);
 
 // ==================== LEGACY ENDPOINTS (backward compatibility) ====================
 

@@ -142,6 +142,16 @@ class IncidentService {
             const sm = createStateMachine(ENTITIES.INCIDENT);
             const nextActions = sm.getNextActions(incident.status, role);
 
+            console.log('[DEBUG getIncidentWithActions]', {
+                incidentId,
+                status: incident.status,
+                userId: user?.id,
+                userName: user?.name,
+                userRolesArray: user?.roles,
+                normalizedRole: role,
+                nextActions
+            });
+
             return {
                 success: true,
                 data: {
@@ -203,6 +213,9 @@ class IncidentService {
                 images: data.images ? JSON.stringify(data.images) : null
             });
 
+            // Auto-notify bộ phận liên quan dựa theo category
+            await this.notifyRelevantDepartment(incident, category);
+
             const role = normalizeRole(user);
             const sm = createStateMachine(ENTITIES.INCIDENT);
             const nextActions = sm.getNextActions('reported', role);
@@ -240,6 +253,38 @@ class IncidentService {
         });
         const next = last ? parseInt(last.incident_code.split('-')[2]) + 1 : 1;
         return `INC-${year}-${String(next).padStart(4, '0')}`;
+    }
+
+    /**
+     * Auto-notify bộ phận liên quan dựa theo category
+     */
+    static async notifyRelevantDepartment(incident, category) {
+        try {
+            const NotificationService = require('./NotificationService');
+            
+            const recipientMap = {
+                'EQUIPMENT': ['maintenance', 'engineering'],  // Bảo trì thiết bị
+                'FACILITY': ['facility', 'engineering'],      // Cơ sở hạ tầng
+                'SYSTEM': ['it', 'engineering'],              // Hệ thống IT/điện
+                'OPERATION': ['production', 'planning']       // Vận hành
+            };
+
+            const recipients = recipientMap[category] || ['manager'];
+
+            await NotificationService.sendNotification({
+                type: 'new_incident',
+                entityType: 'incident',
+                entityId: incident.id,
+                title: `🚨 Sự cố mới: ${incident.incident_code}`,
+                message: `[${category}] ${incident.title} - Mức độ: ${incident.severity}`,
+                recipients
+            });
+
+            console.log(`✅ Notified ${recipients.join(', ')} about incident ${incident.incident_code}`);
+        } catch (error) {
+            console.error('Error notifying relevant department:', error);
+            // Don't throw - incident should still be created
+        }
     }
 
     /**

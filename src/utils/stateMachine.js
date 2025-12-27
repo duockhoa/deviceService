@@ -74,35 +74,28 @@ const OPERATIONAL_STATUS = {
 // ========================
 
 const INCIDENT_STATES = {
-    REPORTED: 'reported',
-    TRIAGED: 'triaged',
-    OUT_OF_SERVICE: 'out_of_service',
-    ASSIGNED: 'assigned',
-    IN_PROGRESS: 'in_progress',
-    POST_FIX_CHECK: 'post_fix_check',
-    RESOLVED: 'resolved',
-    CLOSED: 'closed',
-    CANCELLED: 'cancelled'
+    REPORTED: 'reported',           // Báo cáo sự cố (auto notify bộ phận)
+    IN_PROGRESS: 'in_progress',     // Đang xử lý (bộ phận đã tiếp nhận)
+    RESOLVED: 'resolved',           // Đã giải quyết (auto từ maintenance hoặc manual)
+    CLOSED: 'closed',               // Đã đóng
+    CANCELLED: 'cancelled'          // Hủy bỏ
 };
 
 const INCIDENT_ACTIONS = {
-    TRIAGE: 'triage',
-    ISOLATE: 'isolate',
-    ASSIGN: 'assign',
-    START: 'start',
-    SUBMIT_POST_FIX: 'submit_post_fix',
-    POST_FIX_CHECK: 'post_fix_check',  // Unified action with 'result' parameter
-    CLOSE: 'close',
-    CANCEL: 'cancel'
+    ACKNOWLEDGE: 'acknowledge',     // Tiếp nhận xử lý (thay cho triage+assign)
+    RESOLVE: 'resolve',             // Đánh dấu đã giải quyết
+    CLOSE: 'close',                 // Đóng sự cố
+    CANCEL: 'cancel'                // Hủy sự cố
 };
 
 const INCIDENT_TRANSITIONS = {
     [INCIDENT_STATES.REPORTED]: {
-        [INCIDENT_ACTIONS.TRIAGE]: {
-            to: INCIDENT_STATES.TRIAGED,
-            allowedRoles: [ROLES.MANAGER, ROLES.QA, ROLES.ADMIN],
+        // Bộ phận liên quan tiếp nhận và bắt đầu xử lý
+        [INCIDENT_ACTIONS.ACKNOWLEDGE]: {
+            to: INCIDENT_STATES.IN_PROGRESS,
+            allowedRoles: [ROLES.TECHNICIAN, ROLES.QA, ROLES.MANAGER, ROLES.ADMIN],
             validate: null,
-            sideEffects: ['setSeverity', 'checkCriticalIsolation'],
+            sideEffects: ['setStartedDate', 'notifyReporter'],
             systemStatus: null,
             operationalStatus: null
         },
@@ -110,89 +103,37 @@ const INCIDENT_TRANSITIONS = {
             to: INCIDENT_STATES.CANCELLED,
             allowedRoles: [ROLES.MANAGER, ROLES.ADMIN],
             validate: 'requireCancelReason',
-            sideEffects: ['auditLog'],
-            systemStatus: null,
-            operationalStatus: null
-        }
-    },
-    [INCIDENT_STATES.TRIAGED]: {
-        [INCIDENT_ACTIONS.ISOLATE]: {
-            to: INCIDENT_STATES.OUT_OF_SERVICE,
-            allowedRoles: [ROLES.MANAGER, ROLES.QA, ROLES.ADMIN],
-            validate: 'requireM1NotificationType',  // SAP PM: Only M1 can be isolated
-            sideEffects: ['setAssetDOWN', 'notifyProduction', 'setIsolated'],  // SAP PM: Asset → DOWN
-            systemStatus: null,
-            operationalStatus: OPERATIONAL_STATUS.DOWN
-        },
-        [INCIDENT_ACTIONS.ASSIGN]: {
-            to: INCIDENT_STATES.ASSIGNED,
-            allowedRoles: [ROLES.MANAGER, ROLES.ADMIN],
-            validate: 'requireAssignedTo',
-            sideEffects: ['notifyTechnician'],
-            systemStatus: null,
-            operationalStatus: null
-        }
-    },
-    [INCIDENT_STATES.OUT_OF_SERVICE]: {
-        [INCIDENT_ACTIONS.ASSIGN]: {
-            to: INCIDENT_STATES.ASSIGNED,
-            allowedRoles: [ROLES.MANAGER, ROLES.ADMIN],
-            validate: 'requireAssignedTo',
-            sideEffects: ['notifyTechnician'],
-            systemStatus: null,
-            operationalStatus: null
-        }
-    },
-    [INCIDENT_STATES.ASSIGNED]: {
-        [INCIDENT_ACTIONS.START]: {
-            to: INCIDENT_STATES.IN_PROGRESS,
-            allowedRoles: [ROLES.TECHNICIAN, ROLES.ADMIN],
-            validate: null,
-            sideEffects: ['setStartedDate'],
+            sideEffects: ['setCancelledDetails'],
             systemStatus: null,
             operationalStatus: null
         }
     },
     [INCIDENT_STATES.IN_PROGRESS]: {
-        [INCIDENT_ACTIONS.SUBMIT_POST_FIX]: {
-            to: INCIDENT_STATES.POST_FIX_CHECK,
-            allowedRoles: [ROLES.TECHNICIAN, ROLES.ADMIN],
+        // Đánh dấu đã xử lý xong (manual hoặc auto từ maintenance)
+        [INCIDENT_ACTIONS.RESOLVE]: {
+            to: INCIDENT_STATES.RESOLVED,
+            allowedRoles: [ROLES.TECHNICIAN, ROLES.QA, ROLES.MANAGER, ROLES.ADMIN],
             validate: null,
-            sideEffects: ['notifyQA'],
+            sideEffects: ['setResolvedDate', 'notifyReporter'],
             systemStatus: null,
             operationalStatus: null
-        }
-    },
-    [INCIDENT_STATES.POST_FIX_CHECK]: {
-        [INCIDENT_ACTIONS.POST_FIX_CHECK]: {
-            to: (context) => {
-                // Dynamic transition based on post_fix_result
-                return context.post_fix_result === 'pass' 
-                    ? INCIDENT_STATES.RESOLVED 
-                    : INCIDENT_STATES.IN_PROGRESS;
-            },
-            allowedRoles: [ROLES.QA, ROLES.ENGINEERING, ROLES.ADMIN],
-            validate: 'requirePostFixResult',
-            sideEffects: (context) => {
-                const effects = ['setPostFixResult'];
-                if (context.post_fix_result === 'pass') {
-                    effects.push('setResolvedDate');
-                    effects.push('setAssetAVLB');  // SAP PM: Asset → AVLB (if no blocking work)
-                } else {
-                    effects.push('notifyTechnician');
-                }
-                return effects;
-            },
+        },
+        [INCIDENT_ACTIONS.CANCEL]: {
+            to: INCIDENT_STATES.CANCELLED,
+            allowedRoles: [ROLES.MANAGER, ROLES.ADMIN],
+            validate: 'requireCancelReason',
+            sideEffects: ['setCancelledDetails'],
             systemStatus: null,
             operationalStatus: null
         }
     },
     [INCIDENT_STATES.RESOLVED]: {
+        // Đóng sự cố sau khi đã resolved
         [INCIDENT_ACTIONS.CLOSE]: {
             to: INCIDENT_STATES.CLOSED,
             allowedRoles: [ROLES.QA, ROLES.MANAGER, ROLES.ADMIN],
-            validate: 'requireDowntimeForM1',  // SAP PM: M1 must have downtime_minutes
-            sideEffects: ['setClosedDate', 'notifyAll', 'checkCAPA', 'setAssetAVLB'],  // SAP PM: Asset → AVLB
+            validate: null,
+            sideEffects: ['setClosedDate', 'notifyAll', 'checkCAPA'],
             systemStatus: null,
             operationalStatus: null
         }
@@ -207,9 +148,7 @@ const INCIDENT_TRANSITIONS = {
 
 const MAINTENANCE_STATES = {
     DRAFT: 'draft',
-    PENDING: 'pending',
     APPROVED: 'approved',
-    SCHEDULED: 'scheduled',
     IN_PROGRESS: 'in_progress',
     AWAITING_ACCEPTANCE: 'awaiting_acceptance',
     ACCEPTED: 'accepted',
@@ -218,9 +157,7 @@ const MAINTENANCE_STATES = {
 };
 
 const MAINTENANCE_ACTIONS = {
-    SUBMIT: 'submit',
     APPROVE: 'approve',
-    SCHEDULE: 'schedule',
     START: 'start',
     SUBMIT_ACCEPTANCE: 'submit_acceptance',
     ACCEPT: 'accept',
@@ -233,10 +170,12 @@ const MAINTENANCE_TRANSITIONS = {
     [MAINTENANCE_STATES.DRAFT]: {
         [MAINTENANCE_ACTIONS.SUBMIT]: {
             to: MAINTENANCE_STATES.PENDING,
-            allowedRoles: [ROLES.PLANNER, ROLES.MANAGER, ROLES.ADMIN],
+            allowedRoles: [ROAPPROVE]: {
+            to: MAINTENANCE_STATES.APPROVED,
+            allowedRoles: [ROLES.MANAGER, ROLES.PLANNER, ROLES.ADMIN],
             validate: null,
-            sideEffects: ['notifyManager'],
-            systemStatus: SYSTEM_STATUS.CREATED,  // SAP PM: CRTD
+            sideEffects: ['setApprovedDetails', 'notifyTechnician'],
+            systemStatus: SYSTEM_STATUS.RELEASED,
             operationalStatus: null
         },
         [MAINTENANCE_ACTIONS.CANCEL]: {
@@ -248,47 +187,24 @@ const MAINTENANCE_TRANSITIONS = {
             operationalStatus: null
         }
     },
-    [MAINTENANCE_STATES.PENDING]: {
-        [MAINTENANCE_ACTIONS.APPROVE]: {
-            to: MAINTENANCE_STATES.APPROVED,
-            allowedRoles: [ROLES.MANAGER, ROLES.QA, ROLES.ADMIN, ROLES.TECHNICIAN],  // Thêm TECHNICIAN để cho phép approve
-            validate: null,
-            sideEffects: ['setApprovedDetails', 'notifyPlanner'],
-            systemStatus: SYSTEM_STATUS.CREATED,  // SAP PM: Still CRTD
-            operationalStatus: null
-        },
-        [MAINTENANCE_ACTIONS.CANCEL]: {
-            to: MAINTENANCE_STATES.CANCELLED,
-            allowedRoles: [ROLES.MANAGER, ROLES.ADMIN],
-            validate: 'requireCancelReason',
-            sideEffects: ['setCancelledDetails'],
-            systemStatus: null,
-            operationalStatus: null
-        }
-    },
     [MAINTENANCE_STATES.APPROVED]: {
-        [MAINTENANCE_ACTIONS.SCHEDULE]: {
-            to: MAINTENANCE_STATES.SCHEDULED,
-            allowedRoles: [ROLES.PLANNER, ROLES.MANAGER, ROLES.ADMIN],
-            validate: 'requireScheduleData',
-            sideEffects: ['notifyTechnician', 'notifyProduction', 'notifyWarehouse'],
-            systemStatus: SYSTEM_STATUS.RELEASED,  // SAP PM: REL (scope locked)
-            operationalStatus: null
-        },
-        [MAINTENANCE_ACTIONS.CANCEL]: {
-            to: MAINTENANCE_STATES.CANCELLED,
-            allowedRoles: [ROLES.MANAGER, ROLES.ADMIN],
-            validate: 'requireCancelReason',
-            sideEffects: ['setCancelledDetails'],
-            systemStatus: null,
-            operationalStatus: null
-        }
-    },
-    [MAINTENANCE_STATES.SCHEDULED]: {
         [MAINTENANCE_ACTIONS.START]: {
             to: MAINTENANCE_STATES.IN_PROGRESS,
             allowedRoles: [ROLES.TECHNICIAN, ROLES.ADMIN],
-            validate: 'checkSystemStatusGates',  // SAP PM: Cannot modify scope if REL
+            validate: null,
+            sideEffects: ['setActualStartDate', 'setAssetMNTC'],
+            systemStatus: SYSTEM_STATUS.RELEASED,
+            operationalStatus: OPERATIONAL_STATUS.MAINTENANCE
+        },
+        [MAINTENANCE_ACTIONS.CANCEL]: {
+            to: MAINTENANCE_STATES.CANCELLED,
+            allowedRoles: [ROLES.MANAGER, ROLES.ADMIN],
+            validate: 'requireCancelReason',
+            sideEffects: ['setCancelledDetails'],
+            systemStatus: null,
+            operationalStatus: null
+        }
+    },
             sideEffects: ['setActualStartDate', 'setAssetMNTC'],  // SAP PM: Asset → MNTC
             systemStatus: SYSTEM_STATUS.RELEASED,  // SAP PM: Stays REL
             operationalStatus: OPERATIONAL_STATUS.MAINTENANCE
@@ -643,16 +559,39 @@ class StateMachine {
 
     /**
      * Lấy danh sách actions có thể thực hiện tiếp theo
+     * Trả về mảng object với {key, label} cho frontend
      */
     getNextActions(currentState, role) {
         const stateTransitions = this.transitions[currentState];
         if (!stateTransitions) return [];
 
+        // Action labels map
+        const actionLabels = {
+            'schedule': 'Lập lịch bảo trì',
+            'start': 'Bắt đầu bảo trì',
+            'complete': 'Hoàn thành & gửi duyệt',
+            'submit_acceptance': 'Gửi nghiệm thu',
+            'accept': 'Nghiệm thu đạt',
+            'reject_acceptance': 'Yêu cầu làm lại',
+            'close': 'Đóng lệnh',
+            'cancel': 'Hủy lệnh',
+            'approve': 'Duyệt',
+            'reject': 'Từ chối',
+            'submit': 'Gửi duyệt',
+            'assign': 'Phân công',
+            'resolve': 'Đánh dấu đã giải quyết',
+            'reopen': 'Mở lại',
+            'escalate': 'Chuyển cấp cao hơn'
+        };
+
         return Object.entries(stateTransitions)
             .filter(([action, transition]) => {
                 return transition.allowedRoles.includes(role) || role === 'ADMIN';
             })
-            .map(([action]) => action);
+            .map(([action]) => ({
+                key: action,
+                label: actionLabels[action] || action
+            }));
     }
 
     /**

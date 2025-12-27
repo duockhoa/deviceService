@@ -73,14 +73,14 @@ const createIncident = async (req, res) => {
 // ==================== ACTION ENDPOINTS ====================
 
 /**
- * POST /api/v1/incidents/:id/triage
- * Action: Phân loại sự cố (set severity, branch to isolate if critical)
- * Body: { severity: 'critical'|'high'|'medium'|'low', notes: string }
+ * POST /api/v1/incidents/:id/acknowledge
+ * Action: Tiếp nhận và bắt đầu xử lý sự cố (thay cho triage + assign)
+ * Body: { notes: string, assigned_to: userId (optional) }
  */
-const triageIncident = async (req, res) => {
+const acknowledgeIncident = async (req, res) => {
     const result = await IncidentService.handleAction(
         req.params.id,
-        INCIDENT_ACTIONS.TRIAGE,
+        INCIDENT_ACTIONS.ACKNOWLEDGE,
         req.body,
         req.user,
         req.ip
@@ -95,20 +95,20 @@ const triageIncident = async (req, res) => {
 
     return res.status(200).json({
         success: true,
-        message: 'Incident triaged successfully',
+        message: 'Incident acknowledged and in progress',
         data: result.data
     });
 };
 
 /**
- * POST /api/v1/incidents/:id/isolate
- * Action: Cô lập thiết bị (set out_of_service, asset status = down)
- * Body: { isolation_notes: string }
+ * POST /api/v1/incidents/:id/resolve
+ * Action: Đánh dấu sự cố đã được giải quyết
+ * Body: { solution: string, root_cause: string, downtime_minutes: number }
  */
-const isolateIncident = async (req, res) => {
+const resolveIncident = async (req, res) => {
     const result = await IncidentService.handleAction(
         req.params.id,
-        INCIDENT_ACTIONS.ISOLATE,
+        INCIDENT_ACTIONS.RESOLVE,
         req.body,
         req.user,
         req.ip
@@ -123,35 +123,7 @@ const isolateIncident = async (req, res) => {
 
     return res.status(200).json({
         success: true,
-        message: 'Incident isolated successfully',
-        data: result.data
-    });
-};
-
-/**
- * POST /api/v1/incidents/:id/assign
- * Action: Phân công kỹ thuật viên
- * Body: { assigned_to: userId }
- */
-const assignIncident = async (req, res) => {
-    const result = await IncidentService.handleAction(
-        req.params.id,
-        INCIDENT_ACTIONS.ASSIGN,
-        req.body,
-        req.user,
-        req.ip
-    );
-
-    if (!result.success) {
-        return res.status(result.code || 500).json({
-            success: false,
-            message: result.error
-        });
-    }
-
-    return res.status(200).json({
-        success: true,
-        message: 'Incident assigned successfully',
+        message: 'Incident resolved successfully',
         data: result.data
     });
 };
@@ -195,6 +167,11 @@ const convertToMaintenance = async (req, res) => {
  * POST /api/v1/incidents/:id/start
  * Action: Bắt đầu xử lý
  */
+// ==================== DEPRECATED ACTION ENDPOINTS ====================
+// These are kept for backward compatibility but should not be used in new code
+// Use acknowledgeIncident and resolveIncident instead
+
+/*
 const startIncident = async (req, res) => {
     const result = await IncidentService.handleAction(
         req.params.id,
@@ -218,11 +195,6 @@ const startIncident = async (req, res) => {
     });
 };
 
-/**
- * POST /api/v1/incidents/:id/submit-post-fix
- * Action: Gửi kiểm tra sau sửa chữa
- * Body: { notes: string }
- */
 const submitPostFix = async (req, res) => {
     const result = await IncidentService.handleAction(
         req.params.id,
@@ -246,11 +218,6 @@ const submitPostFix = async (req, res) => {
     });
 };
 
-/**
- * POST /api/v1/incidents/:id/post-fix-check
- * Action: Kiểm tra sau sửa chữa (pass/fail)
- * Body: { result: 'pass'|'fail', root_cause: string, solution: string, downtime_minutes: number }
- */
 const postFixCheck = async (req, res) => {
     const { result, ...payload } = req.body;
 
@@ -286,12 +253,13 @@ const postFixCheck = async (req, res) => {
         data: serviceResult.data
     });
 };
+*/
 
 /**
  * POST /api/v1/incidents/:id/close
  * Action: Đóng sự cố
  * Body: { notes: string }
- */
+*/
 const closeIncident = async (req, res) => {
     const result = await IncidentService.handleAction(
         req.params.id,
@@ -585,18 +553,14 @@ module.exports = {
     getIncidentReports,
     exportIncidentReports,
     
-    // Action endpoints
-    triageIncident,
-    isolateIncident,
-    assignIncident,
-    convertToMaintenance,
-    startIncident,
-    submitPostFix,
-    postFixCheck,
+    // Action endpoints (Simplified)
+    acknowledgeIncident,    // NEW: Tiếp nhận xử lý (thay cho triage + assign)
+    resolveIncident,         // NEW: Đánh dấu đã giải quyết
     closeIncident,
     cancelIncident,
+    convertToMaintenance,    // Tạo maintenance từ incident
     
-    // Legacy
+    // Legacy (deprecated - keep for backward compatibility)
     updateIncident,
     deleteIncident
 };

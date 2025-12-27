@@ -11,11 +11,16 @@ const {
 } = require('../models');
 const { Op } = require('sequelize');
 const NotificationService = require('../service/NotificationService');
-const { assertRBAC, nextActions, getUserRole, ENTITIES } = require('../utils/workflowRbac');
+const { assertRBAC, getUserRole, ENTITIES, getNextActions } = require('../utils/workflowRbac');
 
 const withActions = (entity, record, role) => {
     const payload = record?.toJSON ? record.toJSON() : record;
-    return { ...payload, allowed_actions: nextActions(entity, payload?.status, role) };
+    const nextActions = getNextActions(entity, payload?.status, role);
+    return { 
+        ...payload, 
+        nextActions: nextActions,
+        allowed_actions: nextActions.map(a => a.key) // Giữ lại để tương thích ngược
+    };
 };
 
 const sendError = (res, error, fallback) => {
