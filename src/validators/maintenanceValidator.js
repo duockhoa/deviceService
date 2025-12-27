@@ -1,6 +1,6 @@
 const Joi = require('joi');
 
-const maintenanceStatuses = ['pending', 'approved', 'in_progress', 'awaiting_approval', 'completed', 'cancelled', 'closed'];
+const maintenanceStatuses = ['draft', 'approved', 'in_progress', 'awaiting_acceptance', 'accepted', 'cancelled', 'closed'];
 const maintenanceTypes = ['cleaning', 'inspection', 'maintenance', 'corrective', 'preventive'];
 const priorityEnum = ['low', 'medium', 'high', 'critical'];
 
@@ -35,7 +35,7 @@ const createMaintenanceSchema = Joi.object({
     estimated_duration: baseSchema.estimated_duration.required(),
     maintenance_type: baseSchema.maintenance_type.default('preventive'),
     priority: baseSchema.priority.default('medium'),
-    status: baseSchema.status.default('pending')
+    status: baseSchema.status.default('draft')
 });
 
 const updateMaintenanceSchema = Joi.object(baseSchema).min(1);

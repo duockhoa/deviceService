@@ -8,22 +8,22 @@ async function startJobs() {
    }
    hasInitialized = true;
    
-   console.log('🔧 Initializing jobs...');
+   console.log('[JOBS] Initializing jobs...');
    
    try {
       // Run sync database
       await syncDatabase();
-      console.log('✅ Database sync completed');
+      console.log('[JOBS] Database sync completed');
    } catch (err) {
-      console.error('❌ Database sync failed:', err.message);
+      console.error('[JOBS] Database sync failed:', err.message);
    }
    
    try {
       // Start scheduler
       startNotificationScheduler();
-      console.log('✅ Scheduler started');
+      console.log('[JOBS] Scheduler started');
    } catch (err) {
-      console.error('❌ Scheduler start failed:', err.message);
+      console.error('[JOBS] Scheduler start failed:', err.message);
    }
 }
 

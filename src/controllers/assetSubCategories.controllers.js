@@ -5,7 +5,9 @@ const getAllAssetSubCategories = async (req, res) => {
     try {
         const { category_id } = req.query;
         
-        let whereCondition = {};
+        let whereCondition = {
+            deleted_at: null  // Chỉ lấy các item chưa bị xóa
+        };
         if (category_id) {
             whereCondition.category_id = category_id;
         }
@@ -209,18 +211,14 @@ const updateAssetSubCategory = async (req, res) => {
     }
 };
 
-// DELETE /api/asset-sub-categories/:id - Xóa asset sub category
+// DELETE /api/asset-sub-categories/:id - Xóa mềm asset sub category
 const deleteAssetSubCategory = async (req, res) => {
     try {
         const { id } = req.params;
 
-        const subCategory = await AssetSubCategories.findByPk(id, {
-            include: [{ 
-                model: Assets, 
-                as: 'Assets',
-                where: { status: { [require('sequelize').Op.ne]: 'inactive' } },
-                required: false
-            }]
+        // Tìm sub category (chỉ lấy các item chưa bị xóa)
+        const subCategory = await AssetSubCategories.findOne({
+            where: { id, deleted_at: null }
         });
 
         if (!subCategory) {
@@ -230,21 +228,17 @@ const deleteAssetSubCategory = async (req, res) => {
             });
         }
 
-        // Kiểm tra xem có asset nào đang sử dụng sub category này không (chỉ đếm active assets)
-        if (subCategory.Assets && subCategory.Assets.length > 0) {
-            return res.status(409).json({
-                success: false,
-                message: `Cannot delete sub category. It has ${subCategory.Assets.length} active asset(s) assigned to it.`
-            });
-        }
-
-        await subCategory.destroy();
+        // Soft delete: chỉ cập nhật deleted_at
+        await subCategory.update({
+            deleted_at: new Date()
+        });
 
         res.status(200).json({
             success: true,
             message: 'Asset sub category deleted successfully'
         });
     } catch (error) {
+        console.error('[deleteAssetSubCategory] Error:', error);
         res.status(500).json({
             success: false,
             message: 'Error deleting asset sub category',

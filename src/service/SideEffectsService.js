@@ -128,7 +128,7 @@ class SideEffectsService {
                     resolution_notes: `Tự động resolved khi maintenance closed`
                 });
 
-                console.log(`✅ Auto-closed incident ${incident.incident_code} after maintenance ${maintenance.maintenance_code} completed`);
+                console.log(`[SUCCESS] Auto-closed incident ${incident.incident_code} after maintenance ${maintenance.maintenance_code} completed`);
 
                 // Optionally notify
                 await NotificationService.sendNotification({

@@ -34,7 +34,7 @@ class NotificationService {
                 expires_at: expiresAt
             });
 
-            console.log(`✅ Notification created: ${type} for ${recipientType}:${recipientId}`);
+            console.log(`[SUCCESS] Notification created: ${type} for ${recipientType}:${recipientId}`);
             return notification;
         } catch (error) {
             console.error('Error creating notification:', error);
@@ -64,7 +64,7 @@ class NotificationService {
                 }))
             );
 
-            console.log(`✅ ${notifications.length} notifications created`);
+            console.log(`[SUCCESS] ${notifications.length} notifications created`);
             return notifications;
         } catch (error) {
             console.error('Error creating bulk notifications:', error);

@@ -15,7 +15,7 @@ async function checkOverdueCalibrations() {
     try {
         const result = await CalibrationService.checkOverdueCalibrations();
         
-        console.log(`✅ Overdue check complete:`);
+        console.log(`[CALIBRATION] Overdue check complete:`);
         console.log(`   - Assets marked overdue: ${result.count}`);
         console.log(`   - Notifications sent: ${result.count * 2} (Planners + QA)`);
         
@@ -29,7 +29,7 @@ async function checkOverdueCalibrations() {
         
         return result;
     } catch (error) {
-        console.error(`❌ Overdue check failed:`, error);
+        console.error(`[CALIBRATION] Overdue check failed:`, error);
         throw error;
     }
 }
@@ -44,7 +44,7 @@ async function checkDueSoon(days = 30) {
     try {
         const result = await CalibrationService.checkDueSoon(days);
         
-        console.log(`✅ Due soon check complete:`);
+        console.log(`[CALIBRATION] Due soon check complete:`);
         console.log(`   - Assets due soon: ${result.count}`);
         console.log(`   - Notifications sent to planners`);
         
@@ -58,7 +58,7 @@ async function checkDueSoon(days = 30) {
         
         return result;
     } catch (error) {
-        console.error(`❌ Due soon check failed:`, error);
+        console.error(`[CALIBRATION] Due soon check failed:`, error);
         throw error;
     }
 }
@@ -82,7 +82,7 @@ async function runDailyChecks() {
         await checkDueSoon(30);
         
         console.log(`\n${'='.repeat(80)}`);
-        console.log(`✅ All daily checks completed successfully`);
+        console.log(`[CALIBRATION] All daily checks completed successfully`);
         console.log(`${'='.repeat(80)}\n`);
         
     } catch (error) {

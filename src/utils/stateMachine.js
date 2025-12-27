@@ -168,9 +168,7 @@ const MAINTENANCE_ACTIONS = {
 
 const MAINTENANCE_TRANSITIONS = {
     [MAINTENANCE_STATES.DRAFT]: {
-        [MAINTENANCE_ACTIONS.SUBMIT]: {
-            to: MAINTENANCE_STATES.PENDING,
-            allowedRoles: [ROAPPROVE]: {
+        [MAINTENANCE_ACTIONS.APPROVE]: {
             to: MAINTENANCE_STATES.APPROVED,
             allowedRoles: [ROLES.MANAGER, ROLES.PLANNER, ROLES.ADMIN],
             validate: null,
@@ -194,19 +192,6 @@ const MAINTENANCE_TRANSITIONS = {
             validate: null,
             sideEffects: ['setActualStartDate', 'setAssetMNTC'],
             systemStatus: SYSTEM_STATUS.RELEASED,
-            operationalStatus: OPERATIONAL_STATUS.MAINTENANCE
-        },
-        [MAINTENANCE_ACTIONS.CANCEL]: {
-            to: MAINTENANCE_STATES.CANCELLED,
-            allowedRoles: [ROLES.MANAGER, ROLES.ADMIN],
-            validate: 'requireCancelReason',
-            sideEffects: ['setCancelledDetails'],
-            systemStatus: null,
-            operationalStatus: null
-        }
-    },
-            sideEffects: ['setActualStartDate', 'setAssetMNTC'],  // SAP PM: Asset → MNTC
-            systemStatus: SYSTEM_STATUS.RELEASED,  // SAP PM: Stays REL
             operationalStatus: OPERATIONAL_STATUS.MAINTENANCE
         },
         [MAINTENANCE_ACTIONS.CANCEL]: {

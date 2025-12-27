@@ -203,7 +203,7 @@ class MaintenanceService {
                 asset_id: data.asset_id,
                 maintenance_type: data.maintenance_type || 'maintenance',
                 priority: data.priority || 'medium',
-                status: data.status || 'pending',
+                status: data.status || 'draft',
                 title: data.title,
                 description: data.description || null,
                 scheduled_date: data.scheduled_date || new Date(),

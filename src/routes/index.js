@@ -49,10 +49,10 @@ router.use('/departments', departmentsRouter);
 router.use('/plants', plantsRouter);
 router.use('/areas', areasRouter);
 router.use('/asset-categories', assetCategoriesRouter);
-router.use('/incidents', incidentsRouter);  // State Machine workflow ✅
-router.use('/maintenance', maintenanceRouter);  // State Machine workflow ✅
+router.use('/incidents', incidentsRouter);  // State Machine workflow
+router.use('/maintenance', maintenanceRouter);  // State Machine workflow
 router.use('/maintenance-work', maintenanceWorkRouter);  // Work orders cho kỹ thuật viên
-router.use('/calibration', calibrationRouter);  // ✅ Bảo vệ bằng authMiddleware
+router.use('/calibration', calibrationRouter);  // Protected by authMiddleware
 router.use('/work-requests', workRequestsRouter); // Yêu cầu xử lý
 router.use('/notifications', notificationRouter); // Hệ thống thông báo
 router.use('/handovers', handoversRouter); // Bàn giao thiết bị

@@ -41,6 +41,12 @@ const AssetSubCategories = sequelize.define('asset_sub_categories', {
     updated_at: {
         type: DataTypes.DATE,
         defaultValue: DataTypes.NOW
+    },
+    deleted_at: {
+        type: DataTypes.DATE,
+        allowNull: true,
+        defaultValue: null,
+        comment: 'Soft delete timestamp'
     }
 }, {
     tableName: 'asset_sub_categories',

@@ -400,7 +400,7 @@ const getDashboardSummary = async (req, res) => {
         const pendingMaintenance = await Maintenance.count({
             where: {
                 ...maintenanceWhere,
-                status: { [Op.in]: ['pending', 'approved', 'scheduled'] }
+                status: { [Op.in]: ['draft', 'approved', 'scheduled'] }
             }
         });
 

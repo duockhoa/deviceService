@@ -358,10 +358,114 @@ const updateMaintenance = async (req, res) => {
         });
     }
 
-    return res.status(400).json({
-        success: false,
-        message: 'Please use specific action endpoints instead of direct status update'
-    });
+    // Legacy field update (no status change) to keep existing UI working
+    try {
+        const { Maintenance } = require('../models');
+        
+        // LOG INCOMING PAYLOAD
+        console.log('=== UPDATE MAINTENANCE DEBUG ===');
+        console.log('Maintenance ID:', req.params.id);
+        console.log('User:', req.user?.id, req.user?.username);
+        console.log('Request Body:', JSON.stringify(req.body, null, 2));
+        
+        const maintenance = await Maintenance.findByPk(req.params.id);
+
+        if (!maintenance) {
+            console.log('[ERROR] Maintenance not found:', req.params.id);
+            return res.status(404).json({
+                success: false,
+                message: 'Maintenance record not found'
+            });
+        }
+
+        if (maintenance.is_deleted) {
+            console.log('[ERROR] Maintenance is deleted:', req.params.id);
+            return res.status(400).json({
+                success: false,
+                message: 'Không thể cập nhật bản ghi đã xóa'
+            });
+        }
+
+        const updatePayload = { ...req.body };
+        delete updatePayload.status;
+        
+        console.log('Update Payload (after removing status):', JSON.stringify(updatePayload, null, 2));
+
+        // Sanitize numeric fields - convert empty strings to null
+        const sanitizeNumeric = (value) => {
+            if (value === null || value === undefined || value === '') return null;
+            const num = parseFloat(value);
+            return isNaN(num) ? null : num;
+        };
+
+        // Apply sanitization to numeric fields
+        if ('cost' in updatePayload) {
+            updatePayload.cost = sanitizeNumeric(updatePayload.cost);
+        }
+        if ('estimated_duration' in updatePayload) {
+            updatePayload.estimated_duration = sanitizeNumeric(updatePayload.estimated_duration);
+        }
+        if ('asset_id' in updatePayload && updatePayload.asset_id !== '') {
+            updatePayload.asset_id = parseInt(updatePayload.asset_id);
+        }
+        if ('technician_id' in updatePayload) {
+            updatePayload.technician_id = updatePayload.technician_id === '' || updatePayload.technician_id === null ? null : parseInt(updatePayload.technician_id);
+        }
+
+        console.log('Update Payload (after sanitization):', JSON.stringify(updatePayload, null, 2));
+
+        await maintenance.update(updatePayload);
+        
+        console.log('[SUCCESS] Update successful');
+        console.log('================================');
+
+        return res.status(200).json({
+            success: true,
+            message: 'Maintenance updated successfully',
+            data: maintenance
+        });
+    } catch (error) {
+        // ENHANCED ERROR LOGGING
+        console.error('=== UPDATE MAINTENANCE ERROR ===');
+        console.error('Maintenance ID:', req.params.id);
+        console.error('Error Name:', error.name);
+        console.error('Error Message:', error.message);
+        console.error('Error Stack:', error.stack);
+        
+        // Sequelize validation errors
+        if (error.name === 'SequelizeValidationError') {
+            console.error('Validation Errors:', JSON.stringify(error.errors, null, 2));
+            return res.status(400).json({
+                success: false,
+                message: 'Validation error',
+                error: error.message,
+                details: error.errors.map(e => ({
+                    field: e.path,
+                    message: e.message,
+                    value: e.value
+                }))
+            });
+        }
+        
+        // Foreign key constraint errors
+        if (error.name === 'SequelizeForeignKeyConstraintError') {
+            console.error('Foreign Key Error:', error.fields);
+            return res.status(400).json({
+                success: false,
+                message: 'Foreign key constraint error',
+                error: error.message,
+                field: error.fields
+            });
+        }
+        
+        console.error('================================');
+        
+        return res.status(400).json({
+            success: false,
+            message: 'Error updating maintenance',
+            error: error.message
+        });
+    }
 };
 
 /**

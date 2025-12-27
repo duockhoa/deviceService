@@ -33,9 +33,9 @@ module.exports = {
         comment: 'Trạng thái của công việc bảo trì: pending (chờ xử lý), in_progress (đang thực hiện), awaiting_approval (chờ phê duyệt), completed (hoàn thành), cancelled (đã hủy)'
       });
 
-      console.log('✅ Migration completed successfully');
+      console.log('[MIGRATION] Migration completed successfully');
     } catch (error) {
-      console.error('❌ Migration error:', error);
+      console.error('[MIGRATION] Migration error:', error);
       throw error;
     }
   },
@@ -72,9 +72,9 @@ module.exports = {
         comment: 'Trạng thái của công việc bảo trì'
       });
 
-      console.log('✅ Rollback completed successfully');
+      console.log('[MIGRATION] Rollback completed successfully');
     } catch (error) {
-      console.error('❌ Rollback error:', error);
+      console.error('[MIGRATION] Rollback error:', error);
       throw error;
     }
   }

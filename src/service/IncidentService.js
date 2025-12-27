@@ -280,7 +280,7 @@ class IncidentService {
                 recipients
             });
 
-            console.log(`✅ Notified ${recipients.join(', ')} about incident ${incident.incident_code}`);
+            console.log(`[SUCCESS] Notified ${recipients.join(', ')} about incident ${incident.incident_code}`);
         } catch (error) {
             console.error('Error notifying relevant department:', error);
             // Don't throw - incident should still be created
