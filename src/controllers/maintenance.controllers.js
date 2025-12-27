@@ -469,6 +469,49 @@ const updateMaintenance = async (req, res) => {
 };
 
 /**
+ * PUT /api/maintenance/:id/save-progress - Save progress notes
+ * Technician can save notes without changing status
+ */
+const saveMaintenanceProgress = async (req, res) => {
+    try {
+        const { Maintenance } = require('../models');
+        const maintenance = await Maintenance.findByPk(req.params.id);
+
+        if (!maintenance) {
+            return res.status(404).json({
+                success: false,
+                message: 'Maintenance record not found'
+            });
+        }
+
+        if (maintenance.is_deleted) {
+            return res.status(400).json({
+                success: false,
+                message: 'Cannot update deleted record'
+            });
+        }
+
+        // Only allow updating notes field
+        const { notes } = req.body;
+        
+        await maintenance.update({ notes });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Progress notes saved successfully',
+            data: maintenance
+        });
+    } catch (error) {
+        console.error('Save progress error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Error saving progress notes',
+            error: error.message
+        });
+    }
+};
+
+/**
  * DELETE /api/maintenance/:id - Soft delete
  */
 const deleteMaintenance = async (req, res) => {
@@ -784,5 +827,6 @@ module.exports = {
     
     // Legacy
     updateMaintenance,
+    saveMaintenanceProgress,
     deleteMaintenance
 };

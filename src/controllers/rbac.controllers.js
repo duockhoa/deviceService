@@ -1,5 +1,6 @@
 const { Role, Permission, RolePermission, User, UserRole } = require('../models');
-const { Op } = require('sequelize');
+const { Op, literal } = require('sequelize');
+const sequelize = require('../configs/sequelize');
 
 // ==================== ROLES ====================
 
@@ -307,7 +308,7 @@ const createPermission = async (req, res) => {
 // GET /api/v1/rbac/users - Lấy danh sách tất cả users (cho việc gán role)
 const getAllUsers = async (req, res) => {
     try {
-        const { department, search, limit = 100, offset = 0 } = req.query;
+        const { department, search, role, limit = 100, offset = 0 } = req.query;
         const where = {};
         
         if (department) {
@@ -320,6 +321,18 @@ const getAllUsers = async (req, res) => {
                 { employee_code: { [Op.like]: `%${search}%` } },
                 { email: { [Op.like]: `%${search}%` } }
             ];
+        }
+
+        // Nếu có filter theo role, dùng subquery
+        if (role) {
+            where.id = {
+                [Op.in]: literal(`(
+                    SELECT DISTINCT user_id 
+                    FROM user_roles 
+                    INNER JOIN roles ON user_roles.role_id = roles.id 
+                    WHERE roles.name = '${role}'
+                )`)
+            };
         }
 
         const users = await User.findAll({

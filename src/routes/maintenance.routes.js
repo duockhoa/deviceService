@@ -59,6 +59,9 @@ router.post('/:id/close', checkActionPermission('maintenance', MAINTENANCE_ACTIO
 // Hủy lệnh bảo trì
 router.post('/:id/cancel', checkActionPermission('maintenance', MAINTENANCE_ACTIONS.CANCEL), maintenanceController.cancelMaintenance);
 
+// Lưu ghi chú tiến độ (không thay đổi trạng thái)
+router.put('/:id/save-progress', maintenanceController.saveMaintenanceProgress);
+
 // ==================== LEGACY ENDPOINTS ====================
 
 // Update maintenance
